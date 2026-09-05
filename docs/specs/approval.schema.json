@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/approval.schema.json",
+  "title": "Approval",
+  "description": "A structured human-approval record (SECURITY_AND_PERMISSIONS: approvals are records, not phrases in transcripts). Referenced by audit entries and by wait conditions of kind 'approval'.",
+  "type": "object",
+  "required": ["approval_id", "action", "requested_by_agent_id", "status", "created_at"],
+  "properties": {
+    "approval_id": {"type": "string"},
+    "action": {"type": "string", "description": "What is being approved, e.g. agent.propose_durable, external.side_effect, skill.publish, constitution.amend"},
+    "requested_by_agent_id": {"type": "string"},
+    "execution_id": {"type": "string"},
+    "subject_ref": {"type": "string", "description": "Id of the proposal, permission grant, or artifact being approved."},
+    "approver": {"type": "string", "description": "Human principal id."},
+    "status": {"enum": ["pending", "approved", "denied", "expired"]},
+    "reason": {"type": "string"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "decided_at": {"type": "string", "format": "date-time"}
+  }
+}

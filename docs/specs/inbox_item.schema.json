@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/inbox_item.schema.json",
+  "title": "InboxItem",
+  "description": "The single delivery envelope for all agent-to-agent and human-to-agent communication (ADR 0010). Payload shape is enforced by kind. Work delivery always uses kind 'task' with a Task payload; delegated work is a Task with its delegation field populated (ADR 0012). For task items, sender/recipient, correlation_id, priority, and deadline are routing/index copies of the Task fields and must match them where present; Task is authoritative for work metadata.",
+  "type": "object",
+  "required": ["item_id", "sender_id", "recipient_id", "kind", "created_at", "payload"],
+  "properties": {
+    "item_id": {"type": "string"},
+    "sender_id": {"type": "string", "description": "Agent id, or a human principal id."},
+    "recipient_id": {"type": "string"},
+    "kind": {
+      "enum": [
+        "task",
+        "message",
+        "reply",
+        "notification",
+        "review_request",
+        "permission_request",
+        "maintenance",
+        "delegation_result"
+      ]
+    },
+    "correlation_id": {"type": "string"},
+    "causation_id": {"type": "string"},
+    "priority": {"type": "integer", "minimum": 0},
+    "deadline": {"type": "string", "format": "date-time"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "processed_at": {"type": "string", "format": "date-time"},
+    "payload": {"type": "object"},
+    "provenance": {"$ref": "artifact.schema.json#/properties/provenance"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "task"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "task.schema.json"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "delegation_result"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "worker_result.schema.json"}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "permission_request"}}, "required": ["kind"]},
+      "then": {"properties": {"payload": {"$ref": "approval.schema.json"}}}
+    }
+  ]
+}

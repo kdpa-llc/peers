@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/kdpa-llc/peers/security/advisories/new
+    about: Report privately. Please do not open a public issue for a vulnerability.
+  - name: Architecture and decisions
+    url: https://github.com/kdpa-llc/peers/blob/main/PROJECT_CONSTITUTION.md
+    about: The rules the project holds itself to, and the reasoning behind them.

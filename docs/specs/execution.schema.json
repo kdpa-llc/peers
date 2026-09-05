@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/execution.schema.json",
+  "title": "Execution",
+  "description": "One bounded run of an agent. Executions are journaled; terminal records are never mutated; retries create new records referencing the original (ADR 0007). At most one execution runs per durable agent at a time (ADR 0009).",
+  "type": "object",
+  "required": ["execution_id", "agent_id", "trigger", "status", "started_at"],
+  "properties": {
+    "execution_id": {"type": "string"},
+    "agent_id": {"type": "string"},
+    "trigger": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["human", "inbox", "wait", "retry", "maintenance"]},
+        "ref": {"type": "string", "description": "Id of the inbox item, wait condition, or prior execution that triggered this run."}
+      },
+      "additionalProperties": false
+    },
+    "status": {"enum": ["running", "completed", "failed", "cancelled"]},
+    "retry_of": {"type": "string", "description": "Execution id this run retries, if any."},
+    "started_at": {"type": "string", "format": "date-time"},
+    "ended_at": {"type": "string", "format": "date-time"},
+    "error": {
+      "type": "object",
+      "properties": {
+        "reason": {"type": "string", "description": "e.g. runtime_error, orphaned, budget_exhausted, result_invalid, timeout"},
+        "detail": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "usage": {
+      "type": "object",
+      "properties": {
+        "input_tokens": {"type": "integer", "minimum": 0},
+        "output_tokens": {"type": "integer", "minimum": 0},
+        "cost_usd": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "context_manifest": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Refs (memory ids, event ids, artifact ids) used to build this execution's context; audit trail for context reconstruction."
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/task.schema.json",
+  "title": "Task",
+  "description": "A unit of requested work and the authoritative record for its work metadata. Delivered inside an InboxItem envelope of kind 'task' (ADR 0010); the control plane copies sender/recipient, correlation_id, priority, and deadline into the envelope for routing/indexing and validates that the copies match. A delegated worker task is the same Task shape with parent_task_id and delegation populated (ADR 0012). State transitions: the recipient moves accepted/running/waiting/blocked/completed/failed; the sender (or a human) may cancel any non-terminal task, which the control plane records and notifies to the recipient.",
+  "type": "object",
+  "required": ["task_id", "sender_id", "recipient_id", "objective", "status", "created_at"],
+  "properties": {
+    "task_id": {"type": "string"},
+    "parent_task_id": {"type": "string", "description": "Set on delegated subtasks to the manager's current task id; enables parent/child correlation."},
+    "sender_id": {"type": "string", "description": "Principal that requested/created this work; authoritative over the task delivery envelope copy."},
+    "recipient_id": {"type": "string", "description": "Agent or ephemeral worker assigned this work; authoritative over the task delivery envelope copy."},
+    "objective": {"type": "string"},
+    "context_refs": {"type": "array", "items": {"type": "string"}},
+    "constraints": {"type": "array", "items": {"type": "string"}},
+    "expected_output": {"type": "string"},
+    "priority": {"type": "integer", "minimum": 0},
+    "deadline": {"type": "string", "format": "date-time"},
+    "correlation_id": {"type": "string"},
+    "status": {"enum": ["queued", "accepted", "running", "waiting", "blocked", "completed", "failed", "cancelled"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "delegation": {"$ref": "delegation.schema.json", "description": "Worker-specific execution policy. Present only for tasks delegated to an ephemeral worker (ADR 0012)."},
+    "result_item_id": {"type": "string", "description": "Id of the terminal InboxItem that delivered this task's outcome (ADR 0007)."},
+    "metadata": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"required": ["delegation"]},
+      "then": {"required": ["parent_task_id"]}
+    }
+  ]
+}

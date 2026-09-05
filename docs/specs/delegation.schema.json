@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/delegation.schema.json",
+  "title": "DelegationPackage",
+  "description": "Worker-specific execution policy nested under Task.delegation (ADR 0012). Generic work fields such as objective, constraints, context refs, expected output, sender/recipient, priority, deadline, and parent task identity belong to Task and are intentionally not duplicated here. Workers may not delegate further in v0 (ADR 0009).",
+  "type": "object",
+  "required": ["delegation_id", "manager_agent_id", "output_contract", "budget"],
+  "properties": {
+    "delegation_id": {"type": "string"},
+    "manager_agent_id": {"type": "string"},
+    "artifact_refs": {"type": "array", "items": {"type": "string"}},
+    "granted_permissions": {
+      "type": "array",
+      "items": {"$ref": "permission.schema.json"},
+      "description": "Must be a subset of the manager's own permissions, further restricted for this task (least authority)."
+    },
+    "output_contract": {"type": "string", "description": "Worker-specific result contract layered on top of the standard worker_result.schema.json envelope."},
+    "budget": {
+      "type": "object",
+      "required": ["timeout_seconds"],
+      "properties": {
+        "timeout_seconds": {"type": "integer", "minimum": 1},
+        "max_cost_usd": {"type": "number", "minimum": 0},
+        "max_tokens": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {"$ref": "artifact.schema.json#/properties/provenance"}
+  },
+  "additionalProperties": false
+}

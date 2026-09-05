@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/worker_result.schema.json",
+  "title": "WorkerResult",
+  "description": "The structured terminal return from an ephemeral worker, delivered to the manager as an InboxItem of kind 'delegation_result'. Exactly one terminal result is delivered per delegated Task (ADR 0007, ADR 0012). A result failing this schema is recorded as status 'failed' with the raw output preserved as an artifact.",
+  "type": "object",
+  "required": ["task_id", "delegation_id", "status", "summary"],
+  "properties": {
+    "task_id": {"type": "string", "description": "The delegated Task whose lifecycle this result terminates."},
+    "delegation_id": {"type": "string"},
+    "status": {"enum": ["completed", "failed", "timeout", "cancelled"]},
+    "result": {"type": "object", "description": "Structured result content per the task's expected_output and delegation output_contract."},
+    "summary": {"type": "string", "description": "Concise human/manager-readable summary; required even on failure."},
+    "artifacts": {"type": "array", "items": {"type": "string"}, "description": "Artifact ids produced by the worker."},
+    "evidence": {"type": "array", "items": {"type": "string"}, "description": "References supporting the result (event ids, artifact ids, external refs)."},
+    "proposed_learnings": {
+      "type": "array",
+      "items": {"$ref": "memory_proposal.schema.json"},
+      "description": "Memory proposals in the standard shape so the manager can accept them without translation."
+    },
+    "error": {"type": "string"},
+    "usage": {"$ref": "execution.schema.json#/properties/usage"}
+  }
+}

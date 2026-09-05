@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/memory_proposal.schema.json",
+  "title": "MemoryProposal",
+  "description": "An explicit proposed memory operation — the object agents (and workers, via proposed_learnings) actually emit. Applying a proposal produces a MemoryRevision. Auto-apply policy: create/revise/archive of the agent's own memory within quota; review required for delete, shared memory, or memory referenced by another agent.",
+  "type": "object",
+  "required": ["agent_id", "operation", "rationale"],
+  "properties": {
+    "proposal_id": {"type": "string"},
+    "agent_id": {"type": "string", "description": "Owner of the memory being changed."},
+    "operation": {"enum": ["create", "revise", "merge", "supersede", "archive", "delete"]},
+    "target_memory_ids": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Empty for create; one id for revise/supersede/archive/delete; multiple parents for merge."
+    },
+    "kind": {"$ref": "memory.schema.json#/properties/kind"},
+    "content": {"type": "string"},
+    "rationale": {"type": "string"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "source_execution": {"type": "string"},
+    "evidence_refs": {"type": "array", "items": {"type": "string"}},
+    "provenance": {"$ref": "artifact.schema.json#/properties/provenance"}
+  }
+}

@@ -1,0 +1,58 @@
+name: Feature Request
+description: Suggest a capability or a change of direction
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project has a fairly specific idea of what it is — see `PROJECT_CONSTITUTION.md`
+        and the non-goals in the README. The most valuable requests describe a real friction
+        you hit; the least valuable describe a missing checkbox.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting?
+      description: The situation, not the solution. What did you try to do, and what got in the way?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you do about it?
+      description: Optional. If you have a design in mind, say so — but the problem above is the part we need.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which layer does this touch?
+      options:
+        - Control plane (identity, permissions, scheduling, memory, events)
+        - Data plane (model adapters, sandboxes, runtime)
+        - Observer / management console
+        - Contracts (docs/specs, ADRs)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Does this touch an invariant?
+      description: >
+        `PROJECT_CONSTITUTION.md` and `CONTRIBUTING.md` list the load-bearing ones — the
+        control plane not branching on agent id, context reconstructed rather than
+        accumulated, schemas as source of truth. If your idea requires bending one, say so up
+        front; it is not automatically disqualifying, but it needs an ADR.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I read the non-goals in the README and this is not one of them
+          required: true
+        - label: I searched existing issues
+          required: true

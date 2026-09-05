@@ -1,0 +1,35 @@
+# Two dev dependencies and one optional runtime dependency, so the npm surface is small —
+# but a public repository's actions are worth keeping current, and CI already caught one
+# deprecated runner. Grouped and capped to keep the PR volume near zero.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    groups:
+      development-dependencies:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "automated"]
+    open-pull-requests-limit: 3
+    # No semantic-release here, so prefixes are descriptive rather than load-bearing.
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    labels: ["dependencies", "github-actions", "automated"]
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+      include: "scope"

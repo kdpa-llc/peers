@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/memory.schema.json",
+  "title": "MemoryRecord",
+  "description": "A durable memory record owned by one agent. Changes are made through MemoryProposal operations and recorded as MemoryRevisions.",
+  "type": "object",
+  "required": [
+    "memory_id",
+    "agent_id",
+    "kind",
+    "content",
+    "revision",
+    "created_at"
+  ],
+  "properties": {
+    "memory_id": {
+      "type": "string"
+    },
+    "agent_id": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "identity",
+        "knowledge",
+        "experience",
+        "working",
+        "archive"
+      ]
+    },
+    "content": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Where this content ultimately came from. Set by the control plane from what the producing execution read, never from the agent's own claim (CONTRACT_TESTS #19).",
+      "properties": {
+        "source": {
+          "enum": [
+            "trusted",
+            "untrusted_content",
+            "external"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Memory ids this record supersedes. An array because merge operations combine multiple parents."
+    },
+    "status": {
+      "enum": [
+        "active",
+        "superseded",
+        "archived"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  }
+}

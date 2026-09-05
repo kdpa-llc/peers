@@ -1,0 +1,24 @@
+# Review ownership. The last matching pattern wins.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# A single owner while this is solo-maintained. An unresolvable owner — a team that does
+# not exist — silently requests review from nobody, which is worse than naming one person,
+# so switch these to @kdpa-llc/<team> only once that team actually exists.
+
+* @moscaverd
+
+# The contracts are the project. A change here changes what everything else must satisfy,
+# so it should never land on a single reviewer's nod.
+/docs/specs/                @moscaverd
+/docs/adr/                  @moscaverd
+/PROJECT_CONSTITUTION.md    @moscaverd
+
+# The control plane is where the "no orchestration graph" invariant lives or dies.
+/src/control-plane/         @moscaverd
+
+# Anything touching the trust boundary: sandbox confinement, permissions, budgets.
+/src/data-plane/sandbox/    @moscaverd
+/src/control-plane/permissions.ts @moscaverd
+/SECURITY.md                @moscaverd
+
+/.github/                   @moscaverd

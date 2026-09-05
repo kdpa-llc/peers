@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/wait_condition.schema.json",
+  "title": "WaitCondition",
+  "description": "A declared condition on which an agent stops consuming compute until woken. Every wait carries a mandatory timeout (ADR 0007); waits are cancelled when their owning task reaches a terminal state.",
+  "type": "object",
+  "required": ["wait_id", "agent_id", "kind", "timeout_seconds", "status", "created_at"],
+  "properties": {
+    "wait_id": {"type": "string"},
+    "agent_id": {"type": "string"},
+    "task_id": {"type": "string", "description": "Owning task, if any; terminal task state cancels the wait."},
+    "kind": {"enum": ["reply", "task_completed", "artifact_changed", "time", "approval"]},
+    "predicate": {"type": "object", "description": "Kind-specific condition, e.g. {from_agent_id}, {task_id}, {artifact_id}, {at}, {approval_id}."},
+    "timeout_seconds": {"type": "integer", "minimum": 1},
+    "on_timeout": {
+      "enum": ["wake_with_timeout", "cancel"],
+      "default": "wake_with_timeout",
+      "description": "Default wakes the agent with a timeout outcome, leaving the semantic decision with the agent."
+    },
+    "status": {"enum": ["active", "satisfied", "timeout", "cancelled"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "resolved_at": {"type": "string", "format": "date-time"}
+  }
+}

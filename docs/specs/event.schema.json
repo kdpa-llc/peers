@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/event.schema.json",
+  "title": "AgentEvent",
+  "description": "A normalized platform event. event_type values come from the registry in EVENT_TYPES.md; new types are added there in the same change (ADR 0011).",
+  "type": "object",
+  "required": ["event_id", "event_type", "timestamp", "agent_id"],
+  "properties": {
+    "event_id": {"type": "string"},
+    "event_type": {"type": "string", "pattern": "^[a-z_]+\\.[a-z_]+$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "agent_id": {"type": "string"},
+    "execution_id": {"type": "string"},
+    "task_id": {"type": "string"},
+    "correlation_id": {"type": "string", "description": "The workflow this event belongs to."},
+    "causation_id": {"type": "string", "description": "The event_id of the event that directly caused this one; enables reliable timeline reconstruction."},
+    "summary": {"type": "string"},
+    "payload": {"type": "object"},
+    "usage": {"$ref": "execution.schema.json#/properties/usage"},
+    "visibility": {"enum": ["internal", "organization", "user", "audit"]}
+  }
+}

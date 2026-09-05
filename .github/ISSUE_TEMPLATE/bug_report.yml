@@ -1,0 +1,73 @@
+name: Bug Report
+description: Something behaves differently from what the contracts say it should
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The reproduction matters more than the description. If you can express the bug as a
+        failing test against `tests/`, that is the most useful form it can take.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you observed, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >
+        Exact commands. If it involves the console, include the sequence of
+        `npm run peers -- ...` calls, since state persists between them.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: Which model adapter?
+      description: >
+        The scripted adapter is deterministic; the live one is not. A bug that only appears
+        under `--scripted` is usually a different kind of bug.
+      options:
+        - Claude (default — npm run peers)
+        - OpenAI (--provider openai)
+        - OpenRouter (--provider openrouter)
+        - Scripted adapter (npm test, or --scripted)
+        - Not applicable / unsure
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      description: "`node --version` — must be 22.6 or newer"
+      placeholder: v22.20.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: >
+        Relevant output. `npm run peers -- timeline` and `npm run peers -- agent <id>` are
+        usually more informative than raw logs. Please redact anything sensitive.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am not reporting a security vulnerability (those go through SECURITY.md, privately)
+          required: true
+        - label: I searched existing issues
+          required: true

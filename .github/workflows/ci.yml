@@ -1,0 +1,79 @@
+# The test suite is fully deterministic — fixed clock, sequential ids, scripted model
+# adapter, in-memory SQLite. No API key and no network are needed to run any of it
+# so CI runs exactly what a developer runs locally.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Manual trigger. A workflow that can only be triggered reactively cannot be verified on
+  # demand — the same reason codeql.yml carries one. Without it, the only way to answer
+  # "does CI still run?" is to open a pull request and hope.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: typecheck, tests, console
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Node 22.6+ is required for node:sqlite and --experimental-strip-types,
+      # matching the `engines` field in package.json.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Contract and acceptance tests
+        run: npm test
+
+      # The tests run against in-memory SQLite; the console runs against a file and
+      # spans processes. This is the only check that an organization actually
+      # survives a restart. It runs --scripted: CI must not need a funded API key,
+      # and a live model would make the timeline assertions below nondeterministic.
+      - name: Management console persists across processes
+        env:
+          PEERS_DB: ${{ runner.temp }}/ci-smoke.db
+        run: |
+          set -euo pipefail
+          npm run peers -- seed --scripted
+          npm run peers -- run --scripted
+          # Separate process, same database: the run must have reached quiescence.
+          npm run peers -- timeline --scripted | sed 's/\x1b\[[0-9;]*m//g' > timeline.txt
+          cat timeline.txt
+          grep -q 'delegated to' timeline.txt
+          grep -q 'received worker result' timeline.txt
+          grep -q 'recorded a learning' timeline.txt
+          grep -q 'completed the task' timeline.txt
+
+  schemas:
+    name: schema validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - run: pip install jsonschema
+
+      # ADR 0011 makes docs/specs/ the source of truth, so this job deliberately
+      # installs no Node: a schema change that breaks the shapes the control plane
+      # emits fails here even if the TypeScript still compiles.
+      - name: Validate docs/specs
+        run: python3 scripts/validate-schemas.py

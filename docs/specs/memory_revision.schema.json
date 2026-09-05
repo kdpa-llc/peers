@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/memory_revision.schema.json",
+  "title": "MemoryRevision",
+  "description": "The immutable record of one applied memory change, with rationale and provenance. Attributable to the acting agent (ADR 0003).",
+  "type": "object",
+  "required": [
+    "revision_id",
+    "memory_id",
+    "revision",
+    "operation",
+    "rationale",
+    "actor_agent_id",
+    "created_at"
+  ],
+  "properties": {
+    "revision_id": {
+      "type": "string"
+    },
+    "memory_id": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "operation": {
+      "$ref": "memory_proposal.schema.json#/properties/operation"
+    },
+    "proposal_id": {
+      "type": "string"
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "source_execution": {
+      "type": "string"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Where this content ultimately came from. Set by the control plane from what the producing execution read, never from the agent's own claim (CONTRACT_TESTS #19).",
+      "properties": {
+        "source": {
+          "enum": [
+            "trusted",
+            "untrusted_content",
+            "external"
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "previous_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "actor_agent_id": {
+      "type": "string"
+    },
+    "approval_id": {
+      "type": "string",
+      "description": "Set when the operation required review."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

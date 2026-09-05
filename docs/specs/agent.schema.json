@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/agent.schema.json",
+  "title": "Agent",
+  "description": "A durable agent record as stored by the control plane. Creation manifests may omit system-assigned fields (created_at, revision) \u2014 see ADR 0011.",
+  "type": "object",
+  "required": [
+    "agent_id",
+    "name",
+    "responsibility",
+    "mission",
+    "lifecycle_state",
+    "created_at",
+    "revision"
+  ],
+  "properties": {
+    "agent_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "responsibility": {
+      "type": "string"
+    },
+    "mission": {
+      "type": "string"
+    },
+    "success_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "lifecycle_state": {
+      "enum": [
+        "active",
+        "paused",
+        "retired"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Incremented on every change to the agent definition; governance proposals reference the revision they target."
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "NOT YET ENFORCED: recorded on the agent and shown in context, but no control-plane logic reads it. There is no skill registry or loader yet."
+    },
+    "permissions": {
+      "type": "array",
+      "items": {
+        "$ref": "permission.schema.json"
+      }
+    },
+    "model_config": {
+      "type": "object",
+      "description": "Which model this agent thinks with. Part of the durable definition, like its permissions: an agent that reasons about supply-chain security may warrant a different model, or a deeper thinking level, than one that files chores. Absent means the organization's configured default.",
+      "properties": {
+        "provider": {
+          "enum": [
+            "claude",
+            "openai",
+            "openrouter",
+            "scripted"
+          ]
+        },
+        "model": {
+          "type": "string",
+          "description": "Provider-specific model id, e.g. claude-opus-5 or anthropic/claude-opus-4 on OpenRouter."
+        },
+        "thinking": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "description": "Reasoning depth and token spend. Mapped to each provider's own parameter; providers without one ignore it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "memory_policy": {
+      "type": "object",
+      "properties": {
+        "style": {
+          "type": "string"
+        },
+        "prefer_evidence": {
+          "type": "boolean"
+        },
+        "distill_completed_tasks": {
+          "type": "boolean"
+        },
+        "archive_raw_transcripts": {
+          "type": "boolean"
+        },
+        "retention_rules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true,
+      "description": "NOT YET ENFORCED: recorded on the agent and shown in context, but no control-plane logic reads it. Memory operations are driven by the agent's own proposals; no retention, distillation, or archival policy is applied automatically."
+    },
+    "relationships": {
+      "type": "object",
+      "properties": {
+        "reports_to": {
+          "type": "string"
+        },
+        "peers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "delegates_to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reviews": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "owns_service_for": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "NOT YET ENFORCED: recorded on the agent and shown in context, but no control-plane logic reads it. The context builder shows every colleague from the agent directory rather than routing by declared relationship."
+    },
+    "subscriptions": {
+      "type": "object",
+      "description": "Inbox wake-up filter (ADR 0008): which delivered items make this agent eligible to run. Absent means wake on everything.",
+      "properties": {
+        "kinds": {
+          "type": "array",
+          "items": {
+            "$ref": "inbox_item.schema.json#/properties/kind"
+          }
+        },
+        "min_priority": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object"
+    }
+  }
+}

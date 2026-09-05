@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Local state
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example
+.npmrc
+.pypirc
+.netrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials*.json
+service-account*.json
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime artifacts
+artifacts/
+.peers-artifacts/
+# Legacy pre-rename state must remain excluded from commits.
+.ai-peers-artifacts/
+runs/
+sandboxes/
+tmp/

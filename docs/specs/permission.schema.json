@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/permission.schema.json",
+  "title": "Permission",
+  "description": "A parameterized permission grant. Flat names cannot express scoped grants (paths, allowlists, budgets); every grant is a kind plus an optional scope object. Conventional scope keys per kind: fs.read/fs.write -> {paths: [..]}; net.egress -> {allow: [hosts]} or {unrestricted: true}; model.invoke -> {budget_usd_per_day, max_tokens_per_execution}; sandbox.create -> {backend, policy}; agent.create_ephemeral -> {max_concurrent}; memory.* and agent.delegate/agent.message typically need no scope. Enforcement status: LocalSandbox treats fs paths as virtual sandbox paths and enforces them for snapshot reads, supported file utilities, and output writes; model.invoke is required and its USD/token limits are checked before and after every call; max_concurrent is enforced; every scope participates in least-authority delegation checks. net.egress is unavailable in LocalSandbox and its allow/unrestricted scope is therefore recorded/subset-checked but not an OS network policy. sandbox backend and policy are RECORDED ONLY. USD checks depend on accurate configured pricing and are local guardrails, not provider billing quotas.",
+  "type": "object",
+  "required": [
+    "kind"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z_]+\\.[a-z_]+$",
+      "description": "Examples: fs.read, fs.write, net.egress, model.invoke, sandbox.create, tool.exec, agent.message, agent.delegate, agent.create_ephemeral, agent.propose_durable, agent.approve_proposals, skill.edit_shared, memory.read_own, memory.write_own, memory.read_shared, memory.write_shared, history.delete, external.side_effect"
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "allow": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "unrestricted": {"type": "boolean"},
+        "budget_usd_per_day": {"type": "number", "minimum": 0},
+        "max_tokens_per_execution": {"type": "integer", "minimum": 1},
+        "max_concurrent": {"type": "integer", "minimum": 0},
+        "backend": {"type": "string", "minLength": 1},
+        "policy": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/artifact.schema.json",
+  "title": "Artifact",
+  "description": "A durable external object (code, document, report, dataset, patch, plan) referenced from tasks, results, and memory rather than copied into them.",
+  "type": "object",
+  "required": ["artifact_id", "kind", "uri", "created_at"],
+  "properties": {
+    "artifact_id": {"type": "string"},
+    "kind": {"type": "string", "description": "e.g. file, report, patch, dataset, log"},
+    "uri": {"type": "string", "description": "Location within platform-managed durable storage. LocalSandbox accepts artifacts only from its per-execution output directory, copies verified regular files into separate artifact storage, then removes the execution root."},
+    "content_hash": {"type": "string"},
+    "created_by_agent_id": {"type": "string"},
+    "created_in_execution": {"type": "string"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "provenance": {
+      "type": "object",
+      "description": "Where this content ultimately came from. Recorded from day one so later policy can act on taint (SECURITY_AND_PERMISSIONS: untrusted content).",
+      "properties": {
+        "source": {"enum": ["trusted", "untrusted_content", "external"]},
+        "detail": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "metadata": {"type": "object"}
+  }
+}
