@@ -71,6 +71,21 @@ test("the execution token allowance caps provider output", async () => {
   assert.equal(transport.bodies[0]!.max_tokens, 321);
 });
 
+test("missing or malformed provider usage fails closed", async () => {
+  const response = (usage: ChatResponse["usage"]): ChatResponse => ({
+    choices: [{ message: { content: "done" } }],
+    usage,
+  });
+  for (const usage of [
+    undefined,
+    { prompt_tokens: Number.POSITIVE_INFINITY, completion_tokens: 1 },
+    { prompt_tokens: 1, completion_tokens: -1 },
+  ]) {
+    const adapter = new OpenAIModelAdapter({ transport: async () => response(usage) });
+    await assert.rejects(() => adapter.complete(request()), /provider returned invalid usage/);
+  }
+});
+
 test("run_command becomes a sandbox tool call, not an action", async () => {
   const transport = fakeTransport([{ tool_calls: [call("t1", "run_command", { command: ["ls", "workspace"] })] }]);
   const adapter = new OpenAIModelAdapter({ transport });
@@ -98,6 +113,32 @@ test("only permitted tools are offered (CONTRACT_TESTS #23)", async () => {
   assert.ok(!offered.includes("delegate_task"), "agent.delegate was not granted");
   assert.ok(!offered.includes("send_message"), "agent.message was not granted");
   assert.ok(!offered.includes("propose_memory_update"), "memory.write_own was not granted");
+});
+
+test("strict OpenAI tools require every declared property", async () => {
+  const transport = fakeTransport([{ tool_calls: [call("t1", "note", { text: "checked" })] }]);
+  const adapter = new OpenAIModelAdapter({ transport });
+  await adapter.complete(request({
+    grants: [{ kind: "agent.delegate" }, { kind: "memory.write_own" }],
+  }));
+
+  const offered = (transport.bodies[0]!.tools ?? []).map((tool) => tool.function);
+  for (const tool of offered) {
+    const parameters = tool.parameters as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    if (tool.strict === true) {
+      assert.deepEqual(
+        [...parameters.required].sort(),
+        Object.keys(parameters.properties).sort(),
+        `${String(tool.name)} cannot be strict with optional properties`,
+      );
+    }
+  }
+  for (const name of ["delegate_task", "propose_memory_update"] as const) {
+    assert.equal(offered.find((tool) => tool.name === name)?.strict, false);
+  }
 });
 
 test("delegated permissions are narrowed to the manager's own grants (CONTRACT_TESTS #5)", async () => {

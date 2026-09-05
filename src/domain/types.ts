@@ -1,7 +1,7 @@
 /**
  * Domain types mirroring docs/specs/*.schema.json.
- * The schemas remain authoritative (ADR 0011); tests/contracts/schemas.test.ts asserts
- * that instances produced by this implementation validate against them.
+ * The schemas remain authoritative (ADR 0011). The independent schema validator exercises
+ * representative stored records, while TypeScript and contract tests cover runtime behavior.
  */
 
 // ---------- Permissions (permission.schema.json) ----------

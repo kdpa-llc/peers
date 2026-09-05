@@ -26,11 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Node 22.6+ is required for node:sqlite and --experimental-strip-types,
-      # matching the `engines` field in package.json.
-      - uses: actions/setup-node@v5
+      # Test the exact supported floor rather than only the latest Node 22 patch. Node 22.13
+      # is the first release where node:sqlite is available without a runtime flag.
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '22.13.0'
           cache: npm
 
       - run: npm ci
@@ -38,8 +38,17 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Build distributable package
+        run: npm run build
+
       - name: Contract and acceptance tests
         run: npm test
+
+      # Pack, install, import, and execute the exact artifact a future npm release would
+      # contain. Keeping this separate from source tests catches missing files, stale output,
+      # broken exports, and an unusable CLI shim before publishing is enabled.
+      - name: Installed package smoke test
+        run: npm run test:package
 
       # The tests run against in-memory SQLite; the console runs against a file and
       # spans processes. This is the only check that an organization actually

@@ -95,7 +95,8 @@ than in the kernel, so it belongs on a machine and a repository you trust.
 
 ### Prerequisites
 
-- **Node.js 22.6+** — required for built-in `node:sqlite` and TypeScript type stripping.
+- **Node.js 22.13+** — the first Node 22 release where `node:sqlite` works without a runtime
+  flag. Contributor commands use Node's built-in TypeScript type stripping.
 - **An API key for one provider** — the console runs against a real model by default:
   `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `OPENROUTER_API_KEY`. Pass `--scripted` to run
   without one.
@@ -113,11 +114,17 @@ export ANTHROPIC_API_KEY=...   # or OPENAI_API_KEY / OPENROUTER_API_KEY
 
 ### 2. Run an organization
 
-State lives in a SQLite file, so an organization survives process restarts:
+State lives in a SQLite file, so an organization survives process restarts. Point Peers at
+your repository, register an agent from the checked-in creation manifest, and give it work:
 
 ```bash
-npm run peers -- seed                                  # register the manager + a task
-npm run peers -- run                                   # drive it to quiescence
+export PEERS_DB=./my-org.db
+export PEERS_WORKSPACE=/path/to/your/repo
+npm run peers -- agent create --file examples/agent.json
+npm run peers -- task create --file examples/task.json
+npm run peers -- run                                   # one cycle, then exit
+# Or choose the long-lived process instead:
+npm run peers -- start                                 # stay up and poll continuously
 npm run peers -- org                                   # who exists, what they own
 npm run peers -- timeline                              # normalized, low-noise history
 npm run peers -- agent repo-maintainer                 # drill into one agent
@@ -125,10 +132,27 @@ npm run peers -- chat repo-maintainer "why delegate?"  # direct human interventi
 npm run peers -- recover                               # orphan recovery after a crash
 ```
 
-A manager agent receives a maintenance task, decides on its own whether to delegate, an
-ephemeral worker inspects a repository in a sandbox and returns a structured result, and the
-manager records what it learned. Those decisions are the model's ([ADR 0014][adr-0014]) — the
-control plane contains no branch that produces them.
+The JSON files are creation manifests, not stored records: Peers validates them, rejects
+unknown fields, and supplies ids, timestamps, status, and revisions owned by the control
+plane. You can also create both records directly from the command line:
+
+```bash
+npm run peers -- agent create \
+  --id docs-maintainer --name "Docs Maintainer" \
+  --responsibility "Keep documentation accurate" \
+  --mission "Find and fix the highest-impact documentation gaps" \
+  --permission model.invoke --permission memory.write_own
+npm run peers -- task create --recipient docs-maintainer \
+  --objective "Audit the getting-started guide" --priority 2
+```
+
+File manifests are the right choice for scoped permissions, model selection, subscriptions,
+and the rest of an agent's durable definition. Inline creation is convenient for a small
+agent or an ad-hoc task; no permissions are granted implicitly.
+
+The agent receives its task and decides what to do from its responsibility and reconstructed
+context. Those decisions are the model's ([ADR 0014][adr-0014]) — the control plane contains
+no branch that produces them.
 
 Claude is the default. `--provider` picks another, and `--model` picks a model within it
 ([ADR 0016][adr-0016]):
@@ -154,10 +178,12 @@ npm run peers -- model security-reviewer reset      # back to the organization d
 npm run peers -- agent security-reviewer            # shows the effective model and where it came from
 ```
 
-### 3. Run without a model
+### 3. Run the deterministic demo
 
 `--scripted` swaps the model for a fixed script ([ADR 0015][adr-0015]). No API key, no
-network, no cost, and identical output from one run to the next — which is why CI uses it:
+network, no cost, and identical output from one run to the next — which is why CI uses it.
+`seed` is retained for this reference scenario; real organizations should use `agent create`
+and `task create`:
 
 ```bash
 npm run peers -- seed --scripted
@@ -192,6 +218,11 @@ drill-down, not the home screen.
 
 | Command | What it shows |
 | --- | --- |
+| `agent create` | Register a durable agent from `--file <agent.json>` or explicit fields |
+| `task create` | Assign work from `--file <task.json>` or `--recipient` and `--objective` |
+| `seed` | Seed the hard-coded deterministic reference scenario (demo/CI only) |
+| `run` | Drive eligible work to quiescence once, then exit |
+| `start` | Keep draining eligible work; gracefully stop on `SIGINT` or `SIGTERM` |
 | `org` | Every durable agent, its state, its responsibility, and anything needing attention |
 | `timeline` | The normalized, low-noise history of the whole organization, redacted to the user audience |
 | `events` | The raw event log, straight from the store; `--since <seq>` pages from a sequence number |
@@ -200,6 +231,7 @@ drill-down, not the home screen.
 | `model <id>` | Set the agent's own provider, model and thinking level; `reset` returns it to the default |
 | `approve` / `deny` | Act on pending approval records |
 | `recover` | Re-establish executions orphaned by a crash |
+| `--help` / `--version` | Show command help or the installed package version without opening the database |
 
 ## 🔧 Configuration
 
@@ -211,11 +243,13 @@ The console reads these variables directly ([`src/cli/main.ts`][cli-main]):
   `.peers.db` in the working directory. Point it elsewhere to keep several independent
   organizations side by side.
 - **`PEERS_WORKSPACE`** — the repository root mounted into agent sandboxes. **This is how
-  you aim the organization at your own code.** When unset, the console generates a small
-  throwaway sample repository under the system temp directory, so it works before you have
-  decided what to point it at.
+  you aim the organization at your own code.** When unset, real providers use the current
+  directory. Scripted demo runs generate their known throwaway fixture under the system temp
+  directory.
 - **`PEERS_ARTIFACTS`** — durable storage for verified sandbox outputs. Default:
   `.peers-artifacts` in the working directory.
+- **`PEERS_INTERVAL_MS`** — polling interval for `start`, in milliseconds. Default: `1000`.
+  `--interval-ms` overrides it for one invocation.
 - **`ANTHROPIC_API_KEY`** (or **`ANTHROPIC_AUTH_TOKEN`**), **`OPENAI_API_KEY`**, and
   **`OPENROUTER_API_KEY`** — the credential for the selected provider. Required unless you
   pass `--scripted`; the console names the one it wanted if it is missing.
@@ -231,7 +265,9 @@ the CLI's USD gates cannot be accurate for those providers.
 ```bash
 export PEERS_DB=./my-org.db
 export PEERS_WORKSPACE=/path/to/your/repo
-npm run peers -- seed && npm run peers -- run
+npm run peers -- agent create --file examples/agent.json
+npm run peers -- task create --file examples/task.json
+npm run peers -- run
 ```
 
 ### Command-Line Options
@@ -250,6 +286,22 @@ Selection flags apply to any console command and are stripped before the command
 
 **`events [--since <seq>]`** — start the raw event dump at a sequence number. Default: `0`.
 
+**`start [--interval-ms <milliseconds>]`** — continuously drain eligible work, then poll
+again after the configured interval. The first cycle runs immediately. `Ctrl-C` (`SIGINT`)
+and `SIGTERM` stop cleanly after any in-flight cycle finishes. Use `run` for one cycle and
+exit, such as from cron or CI.
+
+**`agent create --file <agent.json>`** — register a validated durable agent. Alternatively,
+pass `--id`, `--name`, `--responsibility`, and `--mission`; repeat `--permission`, `--skill`,
+or `--success-criterion` as needed. Inline permissions are unscoped, so use a file manifest
+when a permission needs path, host, budget, or concurrency limits. Creation refuses to
+replace an existing agent id.
+
+**`task create --file <task.json>`** — create and deliver validated work. Alternatively,
+pass `--recipient` and `--objective`, plus optional `--sender`, `--expected-output`,
+`--priority`, `--deadline`, repeated `--constraint`, or repeated `--context-ref`. The sender
+defaults to `human:cli`; the recipient must already be a durable agent.
+
 ## 🏗️ Architecture
 
 Two layers, deliberately separated ([ADR 0001][adr-0001]):
@@ -264,13 +316,13 @@ plane never decides what an agent should want.
 
 Three documents cover most of it:
 
-1. [`PROJECT_CONSTITUTION.md`](PROJECT_CONSTITUTION.md) — the architectural north star, and
+1. [`PROJECT_CONSTITUTION.md`](https://github.com/kdpa-llc/peers/blob/main/PROJECT_CONSTITUTION.md) — the architectural north star, and
    the rules the project holds itself to
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the two layers are laid out
-3. [`docs/adr/`](docs/adr/) — the decisions, and why
+2. [`docs/ARCHITECTURE.md`](https://github.com/kdpa-llc/peers/blob/main/docs/ARCHITECTURE.md) — how the two layers are laid out
+3. [`docs/adr/`](https://github.com/kdpa-llc/peers/tree/main/docs/adr) — the decisions, and why
 
-The schemas in [`docs/specs/`](docs/specs/) are the source of truth for every shape these
-layers exchange, and [`docs/`](docs/) covers the execution model, memory and context, the
+The schemas in [`docs/specs/`](https://github.com/kdpa-llc/peers/tree/main/docs/specs) are the source of truth for every shape these
+layers exchange, and [`docs/`](https://github.com/kdpa-llc/peers/tree/main/docs) covers the execution model, memory and context, the
 permission model, and observability in depth.
 
 ## 📐 Contracts
@@ -278,9 +330,9 @@ permission model, and observability in depth.
 The contracts are the deliverable. Implementations are meant to be replaceable; the shapes
 they agree on are not.
 
-- **[`docs/specs/*.json`](docs/specs/)** — JSON Schema is the source of truth
+- **[`docs/specs/*.json`](https://github.com/kdpa-llc/peers/tree/main/docs/specs)** — JSON Schema is the source of truth
   ([ADR 0011][adr-0011]). Change a schema *before* the TypeScript that mirrors it.
-- **[`docs/specs/CONTRACT_TESTS.md`](docs/specs/CONTRACT_TESTS.md)** — the 30 cross-record
+- **[`docs/specs/CONTRACT_TESTS.md`](https://github.com/kdpa-llc/peers/blob/main/docs/specs/CONTRACT_TESTS.md)** — the 30 cross-record
   invariants JSON Schema cannot express, numbered. Tests cite the number they enforce.
 
 ```bash
@@ -296,7 +348,7 @@ scope key that bounds nothing is worse than an absent one.
 
 ## 🔒 Security
 
-[`SECURITY.md`](SECURITY.md) carries the full threat model — what the security boundary
+[`SECURITY.md`](https://github.com/kdpa-llc/peers/blob/main/SECURITY.md) carries the full threat model — what the security boundary
 covers, and what it deliberately leaves to the operator. The short version:
 
 - **`LocalSandbox` is not a kernel boundary.** It exposes only constrained file utilities,
@@ -338,7 +390,7 @@ Report vulnerabilities through [private advisories][security-advisories], not pu
 
 <details>
 <summary><strong>Q: Is it safe to run against my own repository?</strong></summary>
-<p>Against one you trust, on a machine where the blast radius is acceptable, yes. Not against untrusted input — the local sandbox is not an isolation boundary. See <a href="SECURITY.md">SECURITY.md</a>.</p>
+<p>Against one you trust, on a machine where the blast radius is acceptable, yes. Not against untrusted input — the local sandbox is not an isolation boundary. See <a href="https://github.com/kdpa-llc/peers/blob/main/SECURITY.md">SECURITY.md</a>.</p>
 </details>
 
 <details>
@@ -354,11 +406,15 @@ SQLite. No network, no API key, no wall-clock time ([ADR 0015][adr-0015]).
 ```bash
 npm test                              # deterministic contract + acceptance tests
 npm run typecheck                     # tsc --noEmit
+npm run build                         # emitted ESM + declarations in dist/
+npm run test:package                  # pack, clean-install, import, and run the CLI
 python3 scripts/validate-schemas.py   # schemas, independent of the implementation
 ```
 
 CI runs exactly these, plus a management-console smoke test that proves an organization
-survives a process restart.
+survives a process restart. The npm package is intentionally private until scope ownership
+and the release credential are verified; the [release guide](https://github.com/kdpa-llc/peers/blob/main/RELEASING.md)
+documents the safety gate and the planned tag-based flow.
 
 ## 🤝 Contributing
 
@@ -430,11 +486,11 @@ Made with ❤️ by KDPA
 
 [license-badge]: https://img.shields.io/badge/License-MIT-yellow.svg
 [license]: https://opensource.org/licenses/MIT
-[license-file]: ./LICENSE
-[node-badge]: https://img.shields.io/badge/node-%3E%3D22.6-brightgreen.svg
+[license-file]: https://github.com/kdpa-llc/peers/blob/main/LICENSE
+[node-badge]: https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg
 [nodejs]: https://nodejs.org/
 [deps-badge]: https://img.shields.io/badge/runtime%20deps-1-blue.svg
-[package-json]: ./package.json
+[package-json]: https://github.com/kdpa-llc/peers/blob/main/package.json
 [ci-badge]: https://github.com/kdpa-llc/peers/actions/workflows/ci.yml/badge.svg
 [ci-workflow]: https://github.com/kdpa-llc/peers/actions/workflows/ci.yml
 [codeql-badge]: https://github.com/kdpa-llc/peers/actions/workflows/codeql.yml/badge.svg
@@ -448,17 +504,17 @@ Made with ❤️ by KDPA
 [commit-badge]: https://img.shields.io/github/last-commit/kdpa-llc/peers
 [commits]: https://github.com/kdpa-llc/peers/commits/main
 [prs-badge]: https://img.shields.io/badge/PRs-welcome-brightgreen.svg
-[contributing]: ./CONTRIBUTING.md
-[code-of-conduct]: ./CODE_OF_CONDUCT.md
-[cli-main]: ./src/cli/main.ts
+[contributing]: https://github.com/kdpa-llc/peers/blob/main/CONTRIBUTING.md
+[code-of-conduct]: https://github.com/kdpa-llc/peers/blob/main/CODE_OF_CONDUCT.md
+[cli-main]: https://github.com/kdpa-llc/peers/blob/main/src/cli/main.ts
 [security-advisories]: https://github.com/kdpa-llc/peers/security/advisories/new
-[adr-0001]: ./docs/adr/0001-control-plane-data-plane.md
-[adr-0002]: ./docs/adr/0002-agent-autonomy-scheduler.md
-[adr-0011]: ./docs/adr/0011-schemas-are-source-of-truth.md
-[adr-0014]: ./docs/adr/0014-claude-model-adapter.md
-[adr-0015]: ./docs/adr/0015-model-is-the-default.md
-[adr-0016]: ./docs/adr/0016-multiple-model-providers.md
-[adr-0017]: ./docs/adr/0017-per-agent-model.md
+[adr-0001]: https://github.com/kdpa-llc/peers/blob/main/docs/adr/0001-control-plane-data-plane.md
+[adr-0002]: https://github.com/kdpa-llc/peers/blob/main/docs/adr/0002-agent-autonomy-scheduler.md
+[adr-0011]: https://github.com/kdpa-llc/peers/blob/main/docs/adr/0011-schemas-are-source-of-truth.md
+[adr-0014]: https://github.com/kdpa-llc/peers/blob/main/docs/adr/0014-claude-model-adapter.md
+[adr-0015]: https://github.com/kdpa-llc/peers/blob/main/docs/adr/0015-model-is-the-default.md
+[adr-0016]: https://github.com/kdpa-llc/peers/blob/main/docs/adr/0016-multiple-model-providers.md
+[adr-0017]: https://github.com/kdpa-llc/peers/blob/main/docs/adr/0017-per-agent-model.md
 [sponsor-github-badge]: https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-ea4aaa?logo=github
 [sponsor-github]: https://github.com/sponsors/moscaverd
 [sponsor-coffee-badge]: https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?logo=buy-me-a-coffee

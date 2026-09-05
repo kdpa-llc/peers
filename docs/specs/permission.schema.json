@@ -28,8 +28,8 @@
         },
         "unrestricted": {"type": "boolean"},
         "budget_usd_per_day": {"type": "number", "minimum": 0},
-        "max_tokens_per_execution": {"type": "integer", "minimum": 1},
-        "max_concurrent": {"type": "integer", "minimum": 0},
+        "max_tokens_per_execution": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "max_concurrent": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
         "backend": {"type": "string", "minLength": 1},
         "policy": {"type": "string", "minLength": 1}
       },

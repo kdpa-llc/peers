@@ -32,8 +32,8 @@
     "usage": {
       "type": "object",
       "properties": {
-        "input_tokens": {"type": "integer", "minimum": 0},
-        "output_tokens": {"type": "integer", "minimum": 0},
+        "input_tokens": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+        "output_tokens": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
         "cost_usd": {"type": "number", "minimum": 0}
       },
       "additionalProperties": false

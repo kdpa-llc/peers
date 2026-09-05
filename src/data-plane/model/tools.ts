@@ -12,6 +12,7 @@
  * Adapters translate these entries into their vendor's shape. They do not add tools.
  */
 import type { AgentAction, Permission, PermissionKind } from "../../domain/types.ts";
+import { validGrants } from "../../control-plane/permissions.ts";
 import type { ModelRequest } from "./adapter.ts";
 
 /**
@@ -24,9 +25,8 @@ export type ActionTool = {
   requires?: PermissionKind;
   description: string;
   /**
-   * Strict schemas guarantee the control plane receives inputs that validate exactly.
-   * Off only where a tool carries a deliberately free-form payload, since strict mode
-   * cannot express "any object".
+   * OpenAI strict mode requires every declared property to be required. Keep it off for
+   * tools with intentionally optional properties or a deliberately free-form payload.
    */
   strict?: false;
   properties: Record<string, unknown>;
@@ -60,6 +60,7 @@ export const ACTION_TOOLS: ActionTool[] = [
   },
   {
     name: "delegate_task",
+    strict: false,
     requires: "agent.delegate",
     description:
       "Hand a self-contained piece of work to a fresh ephemeral worker. The worker starts " +
@@ -101,6 +102,7 @@ export const ACTION_TOOLS: ActionTool[] = [
   },
   {
     name: "propose_memory_update",
+    strict: false,
     requires: "memory.write_own",
     description:
       "Record something durable and worth carrying into future executions. Prefer facts " +
@@ -190,18 +192,18 @@ export const RUN_COMMAND = "run_command";
 function subsetOf(grants: Permission[], kinds: unknown): Permission[] {
   if (!Array.isArray(kinds)) return [];
   const wanted = new Set(kinds.map(String));
-  return grants.filter((g) => wanted.has(g.kind));
+  return validGrants(grants).filter((g) => wanted.has(g.kind));
 }
 
 /** The tools this request's grants actually permit, in table order. */
 export function permittedTools(grants: Permission[]): ActionTool[] {
-  const held = new Set(grants.map((g) => g.kind));
+  const held = new Set(validGrants(grants).map((g) => g.kind));
   return ACTION_TOOLS.filter((t) => !t.requires || held.has(t.requires));
 }
 
 /** Whether the sandbox escape hatch should be offered alongside the action tools. */
 export function permitsRunCommand(grants: Permission[]): boolean {
-  const held = new Set(grants.map((grant) => grant.kind));
+  const held = new Set(validGrants(grants).map((grant) => grant.kind));
   return held.has("tool.exec")
     && held.has("sandbox.create")
     && (held.has("fs.read") || held.has("fs.write"));

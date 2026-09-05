@@ -1,0 +1,42 @@
+# Builds the exact npm artifact without publishing it. Publishing remains deliberately
+# disabled by package.json's `private` flag until npm ownership and credentials are verified.
+name: Package preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: build installable artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:package
+
+      - name: Pack preview
+        run: |
+          mkdir package-preview
+          npm pack --pack-destination package-preview
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: peers-npm-package
+          path: package-preview/*.tgz
+          if-no-files-found: error
+          retention-days: 7

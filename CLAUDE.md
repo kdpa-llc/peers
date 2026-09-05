@@ -10,12 +10,14 @@ become; CONTRIBUTING lists the conventions that break things when ignored.
 npm install                    # one runtime dep (@anthropic-ai/sdk) + typescript, @types/node
 npm test                       # contract + acceptance tests, fully deterministic
 npm run typecheck
+npm run build                  # emitted installable ESM + declarations
+npm run test:package           # pack, clean-install, import, and execute
 npm run peers -- run --scripted # drive an organization with no API key
 npm run peers -- <cmd>         # management console; see README for the command list
 python3 scripts/validate-schemas.py   # needs: pip install jsonschema
 ```
 
-Requires Node 22.6+ (`node:sqlite`, `--experimental-strip-types`).
+Requires Node 22.13+ (`node:sqlite`, `--experimental-strip-types`).
 
 ## Conventions
 

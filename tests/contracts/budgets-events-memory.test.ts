@@ -141,6 +141,59 @@ describe("budget invariants", () => {
     assert.notEqual(store.getTask(task.task_id)!.status, "completed");
   });
 
+  test("a malformed alternative cannot erase a valid model.invoke ceiling", async () => {
+    const grants: Permission[] = [
+      {
+        kind: "model.invoke",
+        // Persistable malformed input: this grant must be ignored everywhere, not treated as
+        // an unbounded alternative merely because its token ceiling is absent.
+        scope: { budget_usd_per_day: "not-a-number" } as unknown as Permission["scope"],
+      },
+      {
+        kind: "model.invoke",
+        scope: { budget_usd_per_day: 0.001, max_tokens_per_execution: 50_000 },
+      },
+    ];
+    const { cp, store, model } = makeCP([
+      stepFor("mgr", "must not run", () => [{ type: "note", text: "no" }]),
+    ], { budgets: { org_usd: 1000, execution_usd: 1000 } });
+    makeManager(cp, grants);
+    cp.assignTask({ sender_id: "human:test", recipient_id: "mgr", objective: "bounded" });
+    await cp.drain();
+
+    const exec = store.listExecutions("mgr")[0]!;
+    assert.equal(model.calls.length, 0, "the valid daily ceiling blocks the reserved call");
+    assert.equal(exec.error?.reason, "budget_exhausted");
+    assert.match(exec.error!.detail!, /agent_day/);
+  });
+
+  test("the broadest valid model.invoke alternative wins consistently", async () => {
+    const grants: Permission[] = [
+      {
+        kind: "model.invoke",
+        scope: { budget_usd_per_day: 1, max_tokens_per_execution: 50_000 },
+      },
+      {
+        kind: "model.invoke",
+        scope: { budget_usd_per_day: 2, max_tokens_per_execution: 100_000 },
+      },
+    ];
+    let outputCap: number | undefined;
+    const { cp, store } = makeCP([
+      stepFor("mgr", "within broad grant", (req) => {
+        outputCap = req.max_output_tokens;
+        return [{ type: "note", text: "allowed by the broader grant" }];
+      }, { usage: { input_tokens: 60_000, output_tokens: 1, cost_usd: 1.5 } }),
+    ], { budgets: { org_usd: 1000, execution_usd: 1000 } });
+    makeManager(cp, grants);
+    cp.assignTask({ sender_id: "human:test", recipient_id: "mgr", objective: "bounded" });
+    await cp.drain();
+
+    const exec = store.listExecutions("mgr")[0]!;
+    assert.equal(exec.status, "completed", "narrower alternatives do not override broader ones");
+    assert.ok(outputCap !== undefined && outputCap > 50_000 && outputCap <= 100_000);
+  });
+
   test("delegation max_cost and max_tokens cap the worker's model response", async () => {
     const cases = [
       {
@@ -185,6 +238,40 @@ describe("budget invariants", () => {
       assert.match(worker.error!.detail!, new RegExp(example.name));
       assert.deepEqual(worker.usage, example.usage, "actual worker usage is persisted");
     }
+  });
+
+  test("the narrowest model and delegation token ceiling caps provider output", async () => {
+    let workerOutputCap: number | undefined;
+    const { cp } = makeCP([
+      stepFor("mgr", "delegate with two token ceilings", () => [{
+        type: "delegate_task",
+        objective: "bounded work",
+        output_contract: "summary",
+        granted_permissions: [{
+          kind: "model.invoke",
+          scope: { budget_usd_per_day: 1, max_tokens_per_execution: 20_000 },
+        }],
+        budget: { timeout_seconds: 60, max_tokens: 10_000 },
+      }]),
+      {
+        label: "capture worker provider allowance",
+        when: (req) => req.agent_id.startsWith("worker-"),
+        then: (req) => {
+          workerOutputCap = req.max_output_tokens;
+          return [{
+            type: "return_worker_result",
+            result: { status: "completed", summary: "within budget" },
+          }];
+        },
+        usage: { input_tokens: 100, output_tokens: 20, cost_usd: 0.01 },
+      },
+    ]);
+    makeManager(cp);
+    cp.assignTask({ sender_id: "human:test", recipient_id: "mgr", objective: "delegate" });
+    await cp.drain();
+
+    assert.ok(workerOutputCap !== undefined && workerOutputCap > 0);
+    assert.ok(workerOutputCap <= 10_000, "delegation's narrower ceiling reaches the provider");
   });
 
   test("model invocation fails closed without an effective grant", async () => {

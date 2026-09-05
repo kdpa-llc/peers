@@ -61,5 +61,11 @@ export interface ModelAdapter {
   readonly name: string;
   /** Context window in tokens; the context builder sizes its budget from this. */
   readonly contextWindow: number;
+  /**
+   * Exact secret values owned by this adapter that the runtime must redact at its durable
+   * boundaries. This covers programmatically supplied credentials that are not discoverable
+   * through Peers' registered environment variables. Callers must never log this result.
+   */
+  sensitiveValuesForRedaction?(): readonly string[];
   complete(req: ModelRequest): Promise<ModelResponse>;
 }

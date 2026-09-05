@@ -121,9 +121,10 @@ microVM, or remote backend must provide kernel and network boundaries when requi
 ### Secrets brokering
 
 There is no general secrets broker in v0. Supported model-provider credentials are read by
-their adapters from the Peers process environment. Their exact values are redacted from
-assembled prompts, model-generated intent, command arguments/results, provider errors, and
-stored tool events. `LocalSandbox` gives
+their adapters from the Peers process environment or supplied programmatically to an adapter.
+Their exact values are registered with the runtime and redacted from assembled prompts,
+model-generated intent, command arguments/results, provider errors, and stored tool events.
+`LocalSandbox` gives
 child processes only a fixed `PATH` and sandbox-local `HOME`, so provider variables are not
 inherited.
 

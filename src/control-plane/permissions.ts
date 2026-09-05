@@ -19,6 +19,95 @@ export type CheckRequest = {
 export type CheckResult = { allowed: boolean; reason?: string; grant?: Permission };
 
 const norm = (p: string): string => resolve(p);
+const SCOPE_KEYS = new Set<keyof PermissionScope>([
+  "paths", "allow", "unrestricted", "budget_usd_per_day", "max_tokens_per_execution",
+  "max_concurrent", "backend", "policy",
+]);
+const PERMISSION_KINDS = new Set<PermissionKind>([
+  "fs.read", "fs.write", "net.egress", "model.invoke", "sandbox.create", "tool.exec",
+  "agent.message", "agent.delegate", "agent.create_ephemeral", "agent.propose_durable",
+  "agent.approve_proposals", "skill.edit_shared", "memory.read_own", "memory.write_own",
+  "memory.read_shared", "memory.write_shared", "history.delete", "external.side_effect",
+]);
+const NUMERIC_SCOPE_KEYS = [
+  "budget_usd_per_day",
+  "max_tokens_per_execution",
+  "max_concurrent",
+] as const;
+
+type NumericScopeKey = typeof NUMERIC_SCOPE_KEYS[number];
+
+/** Runtime validation at the authorization boundary; TypeScript types are not input checks. */
+function validScope(scope: PermissionScope | undefined): boolean {
+  if (scope === undefined) return true;
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return false;
+  if (!Object.keys(scope).every((key) => SCOPE_KEYS.has(key as keyof PermissionScope))) return false;
+  if (scope.paths !== undefined && (
+    !Array.isArray(scope.paths) ||
+    !scope.paths.every((path) => typeof path === "string" && path.length > 0)
+  )) return false;
+  if (scope.allow !== undefined && (
+    !Array.isArray(scope.allow) ||
+    !scope.allow.every((host) => typeof host === "string" && host.length > 0)
+  )) return false;
+  if (scope.unrestricted !== undefined && typeof scope.unrestricted !== "boolean") return false;
+  if (scope.budget_usd_per_day !== undefined && (
+    typeof scope.budget_usd_per_day !== "number" ||
+    !Number.isFinite(scope.budget_usd_per_day) || scope.budget_usd_per_day < 0
+  )) return false;
+  if (scope.max_tokens_per_execution !== undefined && (
+    !Number.isSafeInteger(scope.max_tokens_per_execution) || scope.max_tokens_per_execution < 1
+  )) return false;
+  if (scope.max_concurrent !== undefined && (
+    !Number.isSafeInteger(scope.max_concurrent) || scope.max_concurrent < 0
+  )) return false;
+  for (const key of ["backend", "policy"] as const) {
+    if (scope[key] !== undefined && (typeof scope[key] !== "string" || scope[key].length === 0)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Remove malformed or unknown grants at trust boundaries while preserving every valid alternative. */
+export function validGrants(grants: readonly Permission[]): Permission[] {
+  return grants.filter((grant) =>
+    grant !== null && typeof grant === "object" && !Array.isArray(grant) &&
+    PERMISSION_KINDS.has(grant.kind) && validScope(grant.scope)
+  );
+}
+
+/**
+ * Grants are operator/model-shaped data even when TypeScript says otherwise. Keep the one
+ * runtime validity decision shared by authorization and every downstream ceiling resolver,
+ * so a malformed alternative cannot authorize work or erase a valid alternative's limits.
+ */
+export function validGrantsFor(
+  grants: readonly Permission[],
+  kind: PermissionKind,
+): Permission[] {
+  return validGrants(grants).filter((grant) => grant.kind === kind);
+}
+
+/**
+ * Resolve a numeric ceiling across alternative grants of one kind. The broadest valid grant
+ * wins: an omitted ceiling is unbounded unless the platform supplies `omittedLimit` (as it
+ * does for the daily model budget). If no valid grant exists, only that platform fallback
+ * applies; callers still perform the separate authorization check.
+ */
+export function broadestGrantCeiling(
+  grants: readonly Permission[],
+  kind: PermissionKind,
+  key: NumericScopeKey,
+  omittedLimit?: number,
+): number | undefined {
+  const matching = validGrantsFor(grants, kind);
+  if (matching.length === 0) return omittedLimit;
+
+  const ceilings = matching.map((grant) => grant.scope?.[key] ?? omittedLimit);
+  if (ceilings.some((ceiling) => ceiling === undefined)) return undefined;
+  return Math.max(...ceilings as number[]);
+}
 
 /** True when `child` is the same as or nested under `parent`. */
 export function pathWithin(child: string, parent: string): boolean {
@@ -32,7 +121,7 @@ function hostAllowed(host: string, allow: string[]): boolean {
 }
 
 export function check(grants: Permission[], req: CheckRequest): CheckResult {
-  const candidates = grants.filter((g) => g.kind === req.kind);
+  const candidates = validGrantsFor(grants, req.kind);
   if (candidates.length === 0) return { allowed: false, reason: `no grant for ${req.kind}` };
 
   for (const g of candidates) {
@@ -52,14 +141,9 @@ export function check(grants: Permission[], req: CheckRequest): CheckResult {
   return { allowed: false, reason: `${req.kind} not granted for the requested scope` };
 }
 
-const NUMERIC_SCOPE_KEYS = [
-  "budget_usd_per_day",
-  "max_tokens_per_execution",
-  "max_concurrent",
-] as const;
-
 /** Scope-level containment used by `isSubset`. */
 function scopeWithin(child: PermissionScope | undefined, parent: PermissionScope | undefined): boolean {
+  if (!validScope(child) || !validScope(parent)) return false;
   const c = child ?? {};
   const p = parent ?? {};
 

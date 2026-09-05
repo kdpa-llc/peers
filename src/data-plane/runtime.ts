@@ -13,6 +13,7 @@ import type { ModelAdapter, ToolResult } from "./model/adapter.ts";
 import type { ModelConfig } from "../domain/types.ts";
 import type { Sandbox, SandboxHandle } from "./sandbox/adapter.ts";
 import { redactRegisteredCredentials, registeredCredentialValues } from "./redaction.ts";
+import { validGrants } from "../control-plane/permissions.ts";
 
 /**
  * Ceiling on model turns per execution. Reaching it ends the execution with whatever
@@ -21,21 +22,41 @@ import { redactRegisteredCredentials, registeredCredentialValues } from "./redac
 const MAX_TURNS = 8;
 
 function validatedUsage(raw: Usage): Required<Usage> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("model returned invalid usage");
+  }
   const number = (value: unknown, field: string, integer: boolean): number => {
     if (value === undefined) return 0;
     if (
       typeof value !== "number" || !Number.isFinite(value) || value < 0 ||
-      (integer && !Number.isInteger(value))
+      (integer && !Number.isSafeInteger(value))
     ) {
       throw new Error(`model returned invalid ${field}`);
     }
     return value;
   };
-  return {
+  const usage = {
     input_tokens: number(raw?.input_tokens, "usage.input_tokens", true),
     output_tokens: number(raw?.output_tokens, "usage.output_tokens", true),
     cost_usd: number(raw?.cost_usd, "usage.cost_usd", false),
   };
+  if (!Number.isSafeInteger(usage.input_tokens + usage.output_tokens)) {
+    throw new Error("model returned invalid usage.total_tokens");
+  }
+  return usage;
+}
+
+/**
+ * Add one provider turn without letting individually valid numbers overflow the execution
+ * ledger. Token counters must remain exact safe integers and cost must remain finite; an
+ * unusable total cannot be compared to a budget and therefore fails closed.
+ */
+function accumulateUsage(current: Usage, turn: Required<Usage>): Required<Usage> {
+  return validatedUsage({
+    input_tokens: (current.input_tokens ?? 0) + turn.input_tokens,
+    output_tokens: (current.output_tokens ?? 0) + turn.output_tokens,
+    cost_usd: (current.cost_usd ?? 0) + turn.cost_usd,
+  });
 }
 
 /** Model intent is JSON-shaped; redact registered credentials before it reaches storage. */
@@ -117,13 +138,30 @@ export class AgentRuntime {
 
   async runExecution(args: RunArgs): Promise<RuntimeOutcome> {
     const agentId = args.context.agent.agent_id;
-    const availableActions = args.grants.map((g) => g.kind);
-    const credentials = registeredCredentialValues();
-    const redact = (value: string): string => redactRegisteredCredentials(value, credentials);
+    // Programmatic callers can bypass the CLI's manifest validator. Normalize once before
+    // grants reach the model tool surface, mechanical execution checks, or a sandbox backend.
+    const grants = validGrants(args.grants);
+    const availableActions = grants.map((g) => g.kind);
 
     // One adapter for this execution, resolved from the agent's own declaration. Resolving
     // once here — not per turn — is what makes the conversation buffer span the execution.
     const model = this.adapterFor(args.model_config);
+    const credentials = [...new Set([
+      ...registeredCredentialValues(),
+      ...(model.sensitiveValuesForRedaction?.() ?? []).filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      ),
+    ])].sort((a, b) => b.length - a.length);
+    const redact = (value: string): string => redactRegisteredCredentials(value, credentials);
+    if (
+      args.model_token_limit !== undefined &&
+      (!Number.isSafeInteger(args.model_token_limit) || args.model_token_limit < 1)
+    ) {
+      throw new Error("invalid model token limit");
+    }
+    if (!Number.isSafeInteger(args.context.total_tokens) || args.context.total_tokens < 0) {
+      throw new Error("invalid context token estimate");
+    }
 
     const artifacts: Artifact[] = [];
     const usage: Usage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
@@ -145,10 +183,16 @@ export class AgentRuntime {
         }
 
         const consumedTokens = (usage.input_tokens ?? 0) + (usage.output_tokens ?? 0);
-        const estimatedInputTokens = Math.max(0, args.context.total_tokens);
-        const remainingOutputTokens = args.model_token_limit === undefined
+        const estimatedInputTokens = args.context.total_tokens;
+        const remaining = args.model_token_limit === undefined
           ? undefined
-          : Math.max(1, Math.floor(args.model_token_limit - consumedTokens - estimatedInputTokens));
+          : args.model_token_limit - consumedTokens - estimatedInputTokens;
+        if (remaining !== undefined && remaining < 1) {
+          budgetExhausted = `model token limit ${args.model_token_limit} tokens reached ` +
+            `(projected/spent ${consumedTokens + estimatedInputTokens + 1} tokens)`;
+          break;
+        }
+        const remainingOutputTokens = remaining === undefined ? undefined : Math.floor(remaining);
         let response;
         try {
           response = await model.complete({
@@ -158,7 +202,7 @@ export class AgentRuntime {
             available_actions: availableActions,
             agent_id: agentId,
             execution_id: args.execution_id,
-            grants: args.grants,
+            grants,
             task_id: args.context.task?.task_id,
             tool_results: toolResults,
             turn,
@@ -172,10 +216,10 @@ export class AgentRuntime {
 
         // Usage accumulates across turns so budgets see the true cost of the execution,
         // not just its final turn. Every field is optional on Usage.
-        const turnUsage = validatedUsage(response.usage);
-        usage.input_tokens = (usage.input_tokens ?? 0) + turnUsage.input_tokens;
-        usage.output_tokens = (usage.output_tokens ?? 0) + turnUsage.output_tokens;
-        usage.cost_usd = (usage.cost_usd ?? 0) + turnUsage.cost_usd;
+        const accumulated = accumulateUsage(usage, validatedUsage(response.usage));
+        usage.input_tokens = accumulated.input_tokens;
+        usage.output_tokens = accumulated.output_tokens;
+        usage.cost_usd = accumulated.cost_usd;
 
         // The provider has already charged this usage, so account for it even when the
         // response crosses a ceiling. Its actions and tool calls are not honored unless
@@ -192,8 +236,8 @@ export class AgentRuntime {
         toolResults = [];
 
         if (toolCalls.length > 0) {
-          const canExecute = args.grants.some((grant) => grant.kind === "tool.exec")
-            && args.grants.some((grant) => grant.kind === "sandbox.create");
+          const canExecute = grants.some((grant) => grant.kind === "tool.exec")
+            && grants.some((grant) => grant.kind === "sandbox.create");
           if (!canExecute) {
             for (const call of toolCalls) {
               this.events.emit({
@@ -226,7 +270,7 @@ export class AgentRuntime {
               execution_id: args.execution_id,
               agent_id: agentId,
               mounts: args.sandbox.mounts,
-              grants: args.grants,
+              grants,
               timeout_seconds: args.sandbox.timeout_seconds,
             });
             for (const call of toolCalls) {

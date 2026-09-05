@@ -7,6 +7,7 @@
  */
 import type { Agent, DelegationBudget, Permission, Usage } from "../domain/types.ts";
 import type { Store } from "./store.ts";
+import { broadestGrantCeiling } from "./permissions.ts";
 
 export type BudgetLimits = {
   /** Org-wide ceiling across all agents, in USD. */
@@ -61,8 +62,12 @@ export class Budgets {
 
   /** Daily ceiling for an agent: its model.invoke grant scope, else the platform default. */
   agentDailyLimit(agent: Agent, grants: Permission[] = agent.permissions ?? []): number | undefined {
-    const grant = grants.find((p) => p.kind === "model.invoke");
-    return grant?.scope?.budget_usd_per_day ?? this.limits.default_agent_usd_per_day;
+    return broadestGrantCeiling(
+      grants,
+      "model.invoke",
+      "budget_usd_per_day",
+      this.limits.default_agent_usd_per_day,
+    );
   }
 
   /**
@@ -130,8 +135,11 @@ export class Budgets {
       };
     }
 
-    const modelTokenLimit = options.grants
-      ?.find((p) => p.kind === "model.invoke")?.scope?.max_tokens_per_execution;
+    const modelTokenLimit = broadestGrantCeiling(
+      options.grants ?? [],
+      "model.invoke",
+      "max_tokens_per_execution",
+    );
     if (modelTokenLimit !== undefined && projectedTokens > modelTokenLimit) {
       return {
         ok: false, scope: "model_tokens", limit: modelTokenLimit,

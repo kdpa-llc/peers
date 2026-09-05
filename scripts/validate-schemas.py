@@ -18,21 +18,33 @@ import sys
 
 try:
     from jsonschema import Draft202012Validator
+    from jsonschema.exceptions import SchemaError
     from referencing import Registry, Resource
     from referencing.jsonschema import DRAFT202012
 except ImportError:  # pragma: no cover
     sys.exit("missing dependency: pip install jsonschema")
 
-SPECS = os.path.join(os.path.dirname(__file__), "..", "docs", "specs")
+ROOT = os.path.join(os.path.dirname(__file__), "..")
+SPECS = os.path.join(ROOT, "docs", "specs")
+EXAMPLES = os.path.join(ROOT, "examples")
 NOW = "2026-08-17T12:00:00.000Z"
+
+
+def load_json(path: str) -> dict:
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def load_registry() -> tuple[dict, Registry]:
     schemas = {}
     for path in sorted(glob.glob(os.path.join(SPECS, "*.json"))):
-        schema = json.load(open(path))
+        schema = load_json(path)
         if "$id" not in schema:
             sys.exit(f"{os.path.basename(path)} is missing $id (ADR 0011)")
+        try:
+            Draft202012Validator.check_schema(schema)
+        except SchemaError as error:
+            sys.exit(f"{os.path.basename(path)} is not a valid Draft 2020-12 schema: {error}")
         schemas[schema["$id"]] = schema
     registry = Registry().with_resources(
         [(sid, Resource.from_contents(s, default_specification=DRAFT202012))
@@ -75,6 +87,9 @@ WORKER_RESULT = {
     "usage": {"input_tokens": 5200, "output_tokens": 640, "cost_usd": 0.05},
 }
 
+EXAMPLE_AGENT = load_json(os.path.join(EXAMPLES, "agent.json"))
+EXAMPLE_TASK = load_json(os.path.join(EXAMPLES, "task.json"))
+
 CASES: list[tuple[str, str, dict, bool]] = [
     ("delegated Task", "Task", DELEGATED_TASK, True),
     ("Task without parent_task_id but with delegation", "Task",
@@ -106,6 +121,12 @@ CASES: list[tuple[str, str, dict, bool]] = [
         ],
         "subscriptions": {"kinds": ["task", "delegation_result"], "min_priority": 0},
     }, True),
+    ("checked-in agent creation example promoted to a stored Agent", "Agent", {
+        **EXAMPLE_AGENT,
+        "lifecycle_state": EXAMPLE_AGENT.get("lifecycle_state", "active"),
+        "created_at": NOW,
+        "revision": 1,
+    }, True),
     ("Agent with flat string permissions", "Agent", {
         "agent_id": "x", "name": "X", "responsibility": "r", "mission": "m",
         "lifecycle_state": "active", "created_at": NOW, "revision": 1,
@@ -120,6 +141,56 @@ CASES: list[tuple[str, str, dict, bool]] = [
         "execution_id": "exec-001", "agent_id": "repo-maintainer",
         "trigger": {"type": "inbox", "ref": "inbox-001"}, "status": "completed",
         "started_at": NOW, "usage": {"input_tokens": 2400, "output_tokens": 320, "cost_usd": 0.02},
+    }, True),
+    ("Approval", "Approval", {
+        "approval_id": "approval-001", "action": "memory.delete",
+        "requested_by_agent_id": "repo-maintainer", "execution_id": "exec-001",
+        "subject_ref": "memory-001", "approver": "human:operator", "status": "approved",
+        "reason": "The superseded record is safe to remove.",
+        "created_at": NOW, "decided_at": NOW,
+    }, True),
+    ("Artifact", "Artifact", {
+        "artifact_id": "artifact-001", "kind": "file",
+        "uri": "/var/lib/peers/exec-001/outputs/report.txt",
+        "content_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "created_by_agent_id": "repo-maintainer", "created_in_execution": "exec-001",
+        "created_at": NOW,
+        "provenance": {"source": "untrusted_content", "detail": "sandbox output"},
+        "metadata": {"media_type": "text/plain"},
+    }, True),
+    ("MemoryRecord", "MemoryRecord", {
+        "memory_id": "memory-001", "agent_id": "repo-maintainer", "kind": "knowledge",
+        "content": "The checkout suite uses a 2000ms timeout.", "revision": 2,
+        "confidence": 0.9, "source_refs": ["artifact-001"],
+        "provenance": {"source": "untrusted_content", "detail": "repository inspection"},
+        "supersedes": ["memory-000"], "status": "active",
+        "created_at": NOW, "updated_at": NOW,
+        "metadata": {"topic": "tests"},
+    }, True),
+    ("MemoryRevision", "MemoryRevision", {
+        "revision_id": "memory-revision-002", "memory_id": "memory-001", "revision": 2,
+        "operation": "revise", "proposal_id": "memory-proposal-002",
+        "rationale": "The failing test supplied a more precise timeout value.",
+        "confidence": 0.9, "source_execution": "exec-001",
+        "evidence_refs": ["artifact-001"],
+        "provenance": {"source": "untrusted_content", "detail": "repository inspection"},
+        "previous_revision": 1, "actor_agent_id": "repo-maintainer",
+        "approval_id": "approval-001", "created_at": NOW,
+    }, True),
+    ("MemoryProposal", "MemoryProposal", {
+        "proposal_id": "memory-proposal-002", "agent_id": "repo-maintainer",
+        "operation": "revise", "target_memory_ids": ["memory-001"], "kind": "knowledge",
+        "content": "The checkout suite uses a 2000ms default timeout.",
+        "rationale": "The failing test supplied a more precise timeout value.",
+        "confidence": 0.9, "source_execution": "exec-001",
+        "evidence_refs": ["artifact-001"],
+        "provenance": {"source": "untrusted_content", "detail": "repository inspection"},
+    }, True),
+    ("checked-in task creation example promoted to a stored Task", "Task", {
+        **EXAMPLE_TASK,
+        "task_id": "task-example",
+        "status": "queued",
+        "created_at": NOW,
     }, True),
     ("WaitCondition", "WaitCondition", {
         "wait_id": "wait-001", "agent_id": "repo-maintainer", "task_id": "task-001",

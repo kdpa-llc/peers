@@ -14,11 +14,10 @@ default branch is supported.
 **Please do not open a public issue for a vulnerability.**
 
 Use [GitHub's private vulnerability reporting](https://github.com/kdpa-llc/peers/security/advisories/new)
-on this repository. The maintainers must enable that feature as part of publication—before
-announcing or accepting contributions if GitHub exposes the setting only after the visibility
-change. If it is unavailable to you, open an issue containing only "security report,
-requesting private contact" and nothing else, and a maintainer will follow up. The issue and
-its metadata are public; do not include vulnerability details there.
+on this repository; private vulnerability reporting is enabled. If GitHub does not make that
+form available to you, open an issue containing only "security report, requesting private
+contact" and nothing else, and a maintainer will follow up. The issue and its metadata are
+public; do not include vulnerability details there.
 
 Please include what you would want to receive yourself: what the flaw is, how to reproduce
 it, what an attacker gets, and a suggested fix if you have one.
@@ -83,9 +82,9 @@ gates:
 
 The supported model credentials are `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`,
 `OPENAI_API_KEY`, and `OPENROUTER_API_KEY`. Provider adapters read these from the process
-environment. Their exact configured values are redacted at the final runtime boundary from
-assembled prompts, model-generated intent, command arguments/results, provider error messages,
-and persisted tool events.
+environment or accept them programmatically. Their exact configured values are registered
+with the runtime and redacted at the final boundary from assembled prompts, model-generated
+intent, command arguments/results, provider error messages, and persisted tool events.
 `LocalSandbox` does not inherit them in its subprocess environment.
 
 This is not general secret detection. Workspace snapshots omit `.git`, `.env*`, `.npmrc`,

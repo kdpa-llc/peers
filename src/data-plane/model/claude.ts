@@ -94,6 +94,10 @@ export class ClaudeModelAdapter implements ModelAdapter {
     this.apiKey = opts.apiKey;
   }
 
+  sensitiveValuesForRedaction(): readonly string[] {
+    return this.apiKey ? [this.apiKey] : [];
+  }
+
   /**
    * Built lazily so constructing the adapter never requires the SDK to be installed —
    * only actually talking to a model does.
@@ -236,13 +240,19 @@ export class ClaudeModelAdapter implements ModelAdapter {
   }
 
   private usageOf(message: Anthropic.Beta.BetaMessage): Usage {
-    const input = message.usage?.input_tokens ?? 0;
-    const output = message.usage?.output_tokens ?? 0;
+    const input = message.usage?.input_tokens;
+    const output = message.usage?.output_tokens;
+    if (!Number.isSafeInteger(input) || (input ?? -1) < 0) {
+      throw new Error("provider returned invalid usage.input_tokens");
+    }
+    if (!Number.isSafeInteger(output) || (output ?? -1) < 0) {
+      throw new Error("provider returned invalid usage.output_tokens");
+    }
     return {
-      input_tokens: input,
-      output_tokens: output,
+      input_tokens: input!,
+      output_tokens: output!,
       cost_usd:
-        (input * this.pricing.input_per_mtok + output * this.pricing.output_per_mtok) / 1_000_000,
+        (input! * this.pricing.input_per_mtok + output! * this.pricing.output_per_mtok) / 1_000_000,
     };
   }
 }

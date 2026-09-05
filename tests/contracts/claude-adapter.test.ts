@@ -76,6 +76,17 @@ test("the execution token allowance caps provider output", async () => {
   assert.equal(client.bodies[0].max_tokens, 321);
 });
 
+test("malformed provider usage fails closed", async () => {
+  for (const usage of [
+    { input_tokens: Number.POSITIVE_INFINITY, output_tokens: 1 },
+    { input_tokens: 1, output_tokens: -1 },
+  ]) {
+    const client = fakeClient([{ content: [], usage }]);
+    const adapter = new ClaudeModelAdapter({ client });
+    await assert.rejects(() => adapter.complete(request()), /provider returned invalid usage/);
+  }
+});
+
 test("run_command becomes a sandbox tool call, not an action", async () => {
   const client = fakeClient([{
     content: [toolUse("t1", "run_command", { command: ["ls", "workspace"] })],
