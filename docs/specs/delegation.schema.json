@@ -19,9 +19,9 @@
       "type": "object",
       "required": ["timeout_seconds"],
       "properties": {
-        "timeout_seconds": {"type": "integer", "minimum": 1},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
         "max_cost_usd": {"type": "number", "minimum": 0},
-        "max_tokens": {"type": "integer", "minimum": 1}
+        "max_tokens": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
       },
       "additionalProperties": false
     },

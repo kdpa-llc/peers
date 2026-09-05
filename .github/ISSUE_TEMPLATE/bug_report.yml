@@ -48,7 +48,7 @@ body:
     id: node-version
     attributes:
       label: Node version
-      description: "`node --version` — must be 22.6 or newer"
+      description: "`node --version` — must be 22.13 or newer"
       placeholder: v22.20.1
     validations:
       required: true

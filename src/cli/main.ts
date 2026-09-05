@@ -6,8 +6,10 @@
  * home screen.
  *
  * State lives in a SQLite file so the console reflects a real, restartable organization:
- *   npm run peers -- seed
+ *   npm run peers -- agent create --file examples/agent.json
+ *   npm run peers -- task create --file examples/task.json
  *   npm run peers -- run
+ *   npm run peers -- start
  *   npm run peers -- org
  *   npm run peers -- timeline
  *   npm run peers -- agent repo-maintainer
@@ -24,9 +26,11 @@
  * model. It exists for CI and for offline inspection. `--scripted` is shorthand for it.
  */
 import { ControlPlane } from "../control-plane/controlPlane.ts";
+import { readFileSync } from "node:fs";
 import { Store } from "../control-plane/store.ts";
 import { EventLog } from "../control-plane/events.ts";
 import { randomIds, systemClock } from "../control-plane/runtime-env.ts";
+import { Scheduler } from "../control-plane/scheduler.ts";
 import { AgentRuntime } from "../data-plane/runtime.ts";
 import { LocalSandbox } from "../data-plane/sandbox/local.ts";
 import {
@@ -35,8 +39,55 @@ import {
 } from "../data-plane/model/select.ts";
 import { Observer } from "../observer/observer.ts";
 import { makeSampleRepo, seed, MANAGER_ID } from "../scripted/scenario.ts";
+import {
+  agentSpecFromArgs, ConfigurationError, taskSpecFromArgs,
+} from "./config.ts";
 
 const DB = process.env.PEERS_DB ?? ".peers.db";
+const CLI = process.env.npm_lifecycle_event === "peers" ? "npm run peers --" : "peers";
+
+const HELP = `Peers — control plane for long-lived AI agents
+
+Usage:
+  ${CLI} <command> [options]
+
+Commands:
+  agent create                 Register an agent from JSON or explicit fields
+  task create                  Assign work from JSON or explicit fields
+  run                          Drain eligible work once, then exit
+  start [--interval-ms N]      Poll continuously until SIGINT or SIGTERM
+  org                          Show the organization and attention needed
+  timeline [n]                 Show recent normalized events
+  events [--since n]           Show raw events after a sequence number
+  agent <id>                   Inspect one agent
+  chat <id> "message"          Send a human message and run the agent
+  model <id> [flags]           Set or reset an agent's model
+  approve <id> | deny <id>     Decide a pending approval
+  recover                      Recover executions orphaned by a crash
+  seed                         Create the deterministic demo organization
+
+Global options:
+  --provider <name>            claude, openai, openrouter, or scripted
+  --model <id>                 Provider model id
+  --thinking <level>           low, medium, high, xhigh, or max
+  --scripted                   Use the local deterministic adapter
+  -h, --help                   Show this help
+  -v, --version                Show the package version`;
+
+// Help and version are metadata operations: keep them independent of provider validation,
+// database creation, workspace setup, and model credentials.
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(HELP);
+  process.exit(0);
+}
+if (process.argv.includes("--version") || process.argv.includes("-v")) {
+  const manifest = JSON.parse(
+    readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+  ) as { version?: unknown };
+  if (typeof manifest.version !== "string") throw new Error("package version is missing");
+  console.log(manifest.version);
+  process.exit(0);
+}
 
 /** `--flag value` or `--flag=value`, so both spellings work. */
 function flag(name: string): string | undefined {
@@ -73,8 +124,11 @@ const THINKING = requestedThinking as ThinkingLevel | undefined;
  */
 const models = new ModelResolver({ provider: PROVIDER, model: MODEL, thinking: THINKING });
 
-const bold = (s: string): string => `[1m${s}[0m`;
-const dim = (s: string): string => `[2m${s}[0m`;
+const styledOutput = Boolean(process.stdout.isTTY) && !("NO_COLOR" in process.env);
+const style = (code: number, value: string): string =>
+  styledOutput ? `\x1b[${code}m${value}\x1b[0m` : value;
+const bold = (s: string): string => style(1, s);
+const dim = (s: string): string => style(2, s);
 
 async function harness(): Promise<{ cp: ControlPlane; observer: Observer; store: Store }> {
   const store = new Store(DB);
@@ -87,7 +141,11 @@ async function harness(): Promise<{ cp: ControlPlane; observer: Observer; store:
     artifactRoot: process.env.PEERS_ARTIFACTS ?? ".peers-artifacts",
   });
   const runtime = new AgentRuntime(runtimeModels, sandbox, events);
-  const workspaceRoot = process.env.PEERS_WORKSPACE ?? (await makeSampleRepo());
+  // Real organizations operate on the directory where the console was launched unless the
+  // operator points them elsewhere. The throwaway checkout exists only for the deterministic
+  // reference scenario, whose fixed script expects its known fixture files.
+  const workspaceRoot = process.env.PEERS_WORKSPACE ??
+    (PROVIDER === "scripted" ? await makeSampleRepo() : process.cwd());
   const cp = new ControlPlane(runtime, {
     store, clock, ids, workspaceRoot,
     budgets: { org_usd: 50, default_agent_usd_per_day: 5, execution_usd: 2 },
@@ -97,7 +155,10 @@ async function harness(): Promise<{ cp: ControlPlane; observer: Observer; store:
 
 function printOrg(observer: Observer): void {
   const rows = observer.organization();
-  if (rows.length === 0) { console.log(dim("no agents yet — run: npm run peers -- seed")); return; }
+  if (rows.length === 0) {
+    console.log(dim(`no agents yet — run: ${CLI} agent create --file <agent.json>`));
+    return;
+  }
   console.log(bold("AGENT".padEnd(24) + "STATE".padEnd(9) + "TASKS  OBJECTIVE"));
   for (const r of rows) {
     const mark = r.attention ? " ⚠" : "";
@@ -124,8 +185,14 @@ function commandArgs(): string[] {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--scripted") continue;
-    if (a === "--provider" || a === "--model" || a === "--thinking") { i++; continue; }
-    if (a.startsWith("--provider=") || a.startsWith("--model=") || a.startsWith("--thinking=")) continue;
+    if (
+      a === "--provider" || a === "--model" || a === "--thinking" ||
+      a === "--interval-ms"
+    ) { i++; continue; }
+    if (
+      a.startsWith("--provider=") || a.startsWith("--model=") ||
+      a.startsWith("--thinking=") || a.startsWith("--interval-ms=")
+    ) continue;
     out.push(a);
   }
   return out;
@@ -133,25 +200,34 @@ function commandArgs(): string[] {
 
 const [command, ...rest] = commandArgs();
 const adapterName = PROVIDER === "scripted" ? "scripted adapter" : `${PROVIDER}${MODEL ? ` (${MODEL})` : ""}`;
-console.log(dim(PROVIDER === "scripted"
-  ? "running against the scripted adapter — deterministic, no API calls"
-  : `running against ${adapterName} — this costs money`));
+const invokesModel = command === "run" || command === "start" || command === "chat";
+console.log(dim(invokesModel
+  ? PROVIDER === "scripted"
+    ? "running against the scripted adapter — deterministic, no API calls"
+    : `running against ${adapterName} — this costs money`
+  : `configured for ${adapterName} — this command does not call the model`));
 
 // Providers accept credentials by routes other than the obvious environment variable —
 // Anthropic via authToken, Bedrock or Vertex — so a missing key is a likely mistake rather
 // than a certain one. Warn, do not exit.
-if (missingCredential(PROVIDER)) {
+if (invokesModel && missingCredential(PROVIDER)) {
   console.log(dim(
     `  no ${keyEnvFor(PROVIDER)} found — set one, or pass --scripted to run without a model`,
   ));
 }
-if (PROVIDER === "openai" || PROVIDER === "openrouter") {
+if (invokesModel && (PROVIDER === "openai" || PROVIDER === "openrouter")) {
   console.log(dim(
     "  USD usage is unavailable in the CLI for OpenAI-compatible models — configure " +
       "provider-side spending limits; token and turn limits still apply",
   ));
 }
 const { cp, observer, store } = await harness();
+
+function creationFailure(error: unknown): never {
+  if (error instanceof ConfigurationError) console.error(error.message);
+  else console.error(error instanceof Error ? error.message : String(error));
+  process.exit(2);
+}
 
 switch (command) {
   case "seed": {
@@ -161,9 +237,50 @@ switch (command) {
   }
 
   case "run": {
-    const n = await cp.drain();
-    console.log(`ran ${n} execution(s)`);
+    const result = await new Scheduler(cp).runOnce();
+    console.log(`ran ${result.executions} execution(s)`);
     printOrg(observer);
+    break;
+  }
+
+  case "start": {
+    const intervalWasProvided = process.argv.some((arg) =>
+      arg === "--interval-ms" || arg.startsWith("--interval-ms="),
+    );
+    const intervalFlag = flag("interval-ms");
+    const intervalRaw = intervalFlag ?? process.env.PEERS_INTERVAL_MS ?? "1000";
+    const intervalMs = Number(intervalRaw);
+    if (
+      (intervalWasProvided && intervalFlag === undefined) || !/^[1-9]\d*$/.test(intervalRaw) ||
+      !Number.isSafeInteger(intervalMs) || intervalMs <= 0 || intervalMs > 2_147_483_647
+    ) {
+      console.error("--interval-ms / PEERS_INTERVAL_MS must be an integer from 1 to 2147483647");
+      process.exitCode = 2;
+      break;
+    }
+
+    const controller = new AbortController();
+    const stop = (): void => {
+      if (controller.signal.aborted) return;
+      console.log("shutdown requested; finishing the current scheduler cycle");
+      controller.abort();
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+
+    console.log(`scheduler started; polling every ${intervalMs}ms (Ctrl-C to stop)`);
+    try {
+      const result = await new Scheduler(cp, {
+        intervalMs,
+        onCycle: ({ cycle, executions }) => {
+          if (executions > 0) console.log(`cycle ${cycle}: ran ${executions} execution(s)`);
+        },
+      }).run({ signal: controller.signal });
+      console.log(`scheduler stopped after ${result.cycles} cycle(s), ${result.executions} execution(s)`);
+    } finally {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+    }
     break;
   }
 
@@ -189,8 +306,20 @@ switch (command) {
   }
 
   case "agent": {
+    if (rest[0] === "create") {
+      const spec = await agentSpecFromArgs(rest.slice(1)).catch(creationFailure);
+      if (store.getAgent(spec.agent_id)) {
+        creationFailure(new ConfigurationError(`agent '${spec.agent_id}' already exists`));
+      }
+      const created = cp.createAgent(spec);
+      console.log(`created agent ${created.agent_id} (${created.name}) in ${DB}`);
+      break;
+    }
     const id = rest[0];
-    if (!id) { console.error("usage: agent <agent_id>"); process.exit(1); }
+    if (!id) {
+      console.error("usage: agent <agent_id> | agent create --file <agent.json> | agent create [fields]");
+      process.exit(1);
+    }
     const d = observer.agentDetail(id);
     if (!d.agent) { console.error(`unknown agent '${id}'`); process.exit(1); }
     console.log(bold(d.agent.name));
@@ -222,6 +351,23 @@ switch (command) {
     for (const m of d.memories) console.log(`    [${m.kind} r${m.revision}] ${m.content}`);
     console.log(bold("\n  recent events"));
     for (const e of d.events.slice(-12)) console.log(dim(`    ${e.event_type}: ${e.summary ?? ""}`));
+    break;
+  }
+
+  case "task": {
+    if (rest[0] !== "create") {
+      console.error("usage: task create --file <task.json> | task create --recipient <agent_id> --objective <text>");
+      process.exit(1);
+    }
+    const spec = await taskSpecFromArgs(rest.slice(1)).catch(creationFailure);
+    if (!store.getAgent(spec.recipient_id) || store.isEphemeral(spec.recipient_id)) {
+      creationFailure(new ConfigurationError(`unknown recipient agent '${spec.recipient_id}'`));
+    }
+    if (spec.parent_task_id && !store.getTask(spec.parent_task_id)) {
+      creationFailure(new ConfigurationError(`unknown parent task '${spec.parent_task_id}'`));
+    }
+    const task = cp.assignTask(spec);
+    console.log(`created task ${task.task_id} for ${task.recipient_id}`);
     break;
   }
 
@@ -286,7 +432,7 @@ switch (command) {
 
   default:
     console.error(`unknown command '${command}'
-commands: seed | run | org | timeline [n] | events [--since N] | agent <id> | chat <id> "msg" | model <id> [flags] | approve <id> | deny <id> | recover`);
+commands: agent create | task create | seed (demo) | run | start [--interval-ms N] | org | timeline [n] | events [--since N] | agent <id> | chat <id> "msg" | model <id> [flags] | approve <id> | deny <id> | recover`);
     process.exit(1);
 }
 

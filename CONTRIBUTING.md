@@ -8,8 +8,8 @@ together.
 
 ## Getting set up
 
-Requires **Node 22.6+** — the project uses `node:sqlite` and runs TypeScript through type
-stripping, both of which need that version.
+Requires **Node 22.13+** — the project uses `node:sqlite` without a runtime flag and runs
+TypeScript through built-in type stripping.
 
 ```bash
 git clone https://github.com/kdpa-llc/peers
@@ -82,15 +82,19 @@ So you do not add them assuming they were forgotten:
   consistency is worth at this size. Match the surrounding code's style by reading it. If the
   project grows past the point where that works, adding the stack is a reasonable PR — with
   an ADR.
-- **No build step, no bundler, no published package.** It runs from source.
-- **No semantic-release.** Versioning is manual and there is nothing to publish yet.
+- **Source execution needs no build step, and there is no bundler.** Development runs from
+  source; the mandatory package smoke check builds emitted ESM and declarations before
+  installing the artifact.
+- **No semantic-release and no live publishing workflow.** Versioning remains manual and
+  publishing stays blocked by `"private": true`; see [`RELEASING.md`](RELEASING.md).
 
 ## Pull requests
 
 1. Branch from `main`.
 2. Make the change, with tests. New behavior needs a test; a bug fix needs a test that would
    have failed before it.
-3. Run `npm test`, `npm run typecheck`, and `python3 scripts/validate-schemas.py`.
+3. Run `npm test`, `npm run typecheck`, `npm run test:package`, and
+   `python3 scripts/validate-schemas.py`.
 4. Update the docs that are now wrong — a schema, an ADR, or `CONTRACT_TESTS.md` if the
    change touches a contract.
 5. Open the PR against `main` and fill in the template.

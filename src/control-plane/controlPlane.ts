@@ -379,15 +379,14 @@ export class ControlPlane {
 
     try {
       const today = iso(this.clock.now()).slice(0, 10);
-      const modelGrantTokenLimits = grants
-        .filter((grant) => grant.kind === "model.invoke")
-        .map((grant) => grant.scope?.max_tokens_per_execution);
       // Grants combine as authority alternatives: any unbounded model.invoke grant makes
       // the grant-level token authority unbounded; otherwise the broadest explicit grant
       // wins. A delegation ceiling remains an independent upper bound.
-      const grantTokenLimit = modelGrantTokenLimits.some((limit) => limit === undefined)
-        ? undefined
-        : Math.max(...modelGrantTokenLimits as number[]);
+      const grantTokenLimit = perms.broadestGrantCeiling(
+        grants,
+        "model.invoke",
+        "max_tokens_per_execution",
+      );
       const tokenLimits = [grantTokenLimit, task?.delegation?.budget.max_tokens]
         .filter((limit): limit is number => limit !== undefined);
       const modelTokenLimit = tokenLimits.length > 0 ? Math.min(...tokenLimits) : undefined;

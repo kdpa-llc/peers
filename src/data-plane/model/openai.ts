@@ -135,6 +135,10 @@ export class OpenAIModelAdapter implements ModelAdapter {
     this.transport = opts.transport;
   }
 
+  sensitiveValuesForRedaction(): readonly string[] {
+    return this.apiKey ? [this.apiKey] : [];
+  }
+
   async complete(req: ModelRequest): Promise<ModelResponse> {
     // A new execution starts a new conversation. This is the line that keeps the adapter
     // honest about context reconstruction.
@@ -253,16 +257,22 @@ export class OpenAIModelAdapter implements ModelAdapter {
   }
 
   private usageOf(response: ChatResponse): Usage {
-    const input = response.usage?.prompt_tokens ?? 0;
-    const output = response.usage?.completion_tokens ?? 0;
+    const input = response.usage?.prompt_tokens;
+    const output = response.usage?.completion_tokens;
+    if (!Number.isSafeInteger(input) || (input ?? -1) < 0) {
+      throw new Error("provider returned invalid usage.prompt_tokens");
+    }
+    if (!Number.isSafeInteger(output) || (output ?? -1) < 0) {
+      throw new Error("provider returned invalid usage.completion_tokens");
+    }
     return {
-      input_tokens: input,
-      output_tokens: output,
+      input_tokens: input!,
+      output_tokens: output!,
       // Without a price for the chosen model, reporting 0 is honest; inventing a number
       // would corrupt the budget ledger. Token gates still apply, but USD gates require
       // operator-supplied pricing for this adapter (ADR 0008/0016).
       cost_usd: this.pricing
-        ? (input * this.pricing.input_per_mtok + output * this.pricing.output_per_mtok) / 1_000_000
+        ? (input! * this.pricing.input_per_mtok + output! * this.pricing.output_per_mtok) / 1_000_000
         : 0,
     };
   }

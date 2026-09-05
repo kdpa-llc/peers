@@ -1,10 +1,10 @@
 # `main` repository ruleset
 
-Settings to apply to `main` before this repository goes public, and the reasoning behind
-each. Use a repository **ruleset**, not classic branch protection: the approved maintainer
-bypass must cover every rule in one place. These are repository settings, not code — nothing
-in the repo enforces them, so this file exists so the configuration is reviewable and
-reproducible rather than living only in one person's memory of what they clicked.
+Settings currently applied to `main`, and the reasoning behind each. The repository uses a
+**ruleset**, not classic branch protection: the approved maintainer bypass must cover every
+rule in one place. These are repository settings, not code — nothing in the repo enforces
+them, so this file exists so the configuration is reviewable and reproducible rather than
+living only in one person's memory of what they clicked.
 
 Create the ruleset before removing or changing any existing protection. When a ruleset and
 classic protection overlap, both are enforced.
@@ -50,20 +50,19 @@ this user, not to the Admin role, so future administrators do not inherit it aut
   a scheduled scan and a moderate-severity gate — and making a scan that can be flaky or slow
   a merge blocker teaches people to bypass protection rather than to read the finding.
 
-  There is now a harder reason too. **While this repository is private, neither can pass**,
-  and both were observed failing on the first pull request that ran them:
+  Before this repository became public, neither advisory job could pass; both were observed
+  failing on the first pull request that ran them:
 
   - `Review Dependencies` — *"Dependency review is not supported on this repository. Please
     ensure that Dependency graph is enabled along with GitHub Advanced Security."*
   - `CodeQL` — analysis itself succeeds; the **upload** fails with *"Code Security must be
     enabled for this repository to use code scanning."*
 
-  Both are gated on GitHub Advanced Security, which a private repository does not have by
-  default, and both hard-fail rather than degrading. Each job is therefore guarded to skip
-  while private, so requiring them would block every merge on a check that is skipped by
-  design. Revisit once the repository is public, where the dependency graph and code
-  scanning are free — that is the point at which requiring them becomes a real choice rather
-  than a foot-gun.
+  Both are gated on GitHub security features that were unavailable to this private
+  repository by default. Their workflows retain a visibility guard so forks and future
+  visibility changes degrade safely. On the public repository they run normally and remain
+  advisory: their results must be investigated, but transient scanner availability does not
+  deadlock the required test path.
 
 **Other**
 
@@ -76,9 +75,8 @@ this user, not to the Admin role, so future administrators do not inherit it aut
 
 ## Repository security settings
 
-Under Settings → Code security, enable these before the visibility change where GitHub makes
-them available. Enable public-only controls immediately after the change and before
-announcing or accepting contributions:
+The public repository has this baseline enabled under Settings → Code security. Re-check it
+after any ownership or visibility change:
 
 - **Private vulnerability reporting**: on — [`SECURITY.md`](../SECURITY.md) directs reporters
   there, so it has to exist

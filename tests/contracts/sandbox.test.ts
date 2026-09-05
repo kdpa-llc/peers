@@ -213,6 +213,21 @@ describe("sandbox path confinement", () => {
     );
   });
 
+  test("a duplicate artifact collection cannot delete the first durable result", async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), "durable-artifact-duplicate-"));
+    const sandbox = new LocalSandbox({ artifactRoot });
+    const handle = await sandbox.create({
+      execution_id: "e-artifact-duplicate", agent_id: "a1", mounts: [], grants: [], timeout_seconds: 10,
+    });
+    await LocalSandbox.writeOutput(handle, "report.md", "published once");
+
+    const first = await sandbox.collectArtifacts(handle);
+    await assert.rejects(() => sandbox.collectArtifacts(handle), { code: "EEXIST" });
+    assert.equal(await readFile(first[0]!.uri, "utf8"), "published once");
+    assert.equal((await readdir(artifactRoot)).length, 1, "no second partial directory was left behind");
+    await sandbox.destroy(handle);
+  });
+
   test("artifact collection rejects a symlink to a host file", async () => {
     const outside = await mkdtemp(join(tmpdir(), "outside-artifact-"));
     const secret = join(outside, "secret.txt");
@@ -354,5 +369,34 @@ describe("sandbox path confinement", () => {
     });
     await assert.rejects(() => access(join(handle.root, "workspace")), /ENOENT/);
     await sandbox.destroy(handle);
+  });
+
+  test("malformed filesystem grants never reach scope handling and valid alternatives survive", async () => {
+    const source = await mkdtemp(join(tmpdir(), "src-malformed-grant-"));
+    await writeFile(join(source, "visible.txt"), "visible", "utf8");
+    const malformed = {
+      kind: "fs.read",
+      scope: { paths: "/" },
+    } as unknown as Parameters<LocalSandbox["create"]>[0]["grants"][number];
+    const sandbox = new LocalSandbox();
+
+    const invalidOnly = await sandbox.create({
+      execution_id: "e-invalid-fs-grant", agent_id: "a1",
+      mounts: [{ source, target: "workspace" }], grants: [malformed], timeout_seconds: 10,
+    });
+    await assert.rejects(() => access(join(invalidOnly.root, "workspace")), /ENOENT/);
+    await sandbox.destroy(invalidOnly);
+
+    const withValidAlternative = await sandbox.create({
+      execution_id: "e-valid-fs-alternative", agent_id: "a1",
+      mounts: [{ source, target: "workspace" }],
+      grants: [malformed, { kind: "fs.read", scope: { paths: ["/workspace"] } }],
+      timeout_seconds: 10,
+    });
+    assert.equal(
+      (await sandbox.exec(withValidAlternative, ["cat", "workspace/visible.txt"])).code,
+      0,
+    );
+    await sandbox.destroy(withValidAlternative);
   });
 });

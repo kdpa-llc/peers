@@ -46,6 +46,14 @@ agree on. No package or GitHub release has been published yet.
   will actually run on.
 - **A bounded model loop** (ADR 0013). Tool output returns to the model for another turn,
   capped at eight, with one sandbox spanning the execution and usage summed across turns.
+- **Operator-authored organizations.** `agent create` and `task create` accept validated JSON
+  manifests or explicit CLI fields, so real organizations no longer depend on the scripted
+  checkout-service fixture.
+- **A long-lived scheduler.** `start` continuously drains eligible work and shuts down
+  cleanly on `SIGINT` or `SIGTERM`; `run` remains the one-cycle path for cron and CI.
+- **An installable package artifact.** The build emits ESM, declarations, a `peers` executable,
+  curated exports, schemas, and examples. Clean-install smoke tests exercise the exact tarball;
+  npm publishing remains disabled behind `"private": true`.
 - **Budget guardrails** — per-execution, per-agent-per-day, organization, delegation, and
   token scopes — charged from reported usage (ADR 0008).
 - **Provenance tainting.** An execution that reads sandbox output taints the memories,
@@ -53,9 +61,9 @@ agree on. No package or GitHub release has been published yet.
   determination overrides the agent's (`CONTRACT_TESTS` #26, #27).
 - **Event-sourced observability** (ADR 0006). Correlation and causation ids thread a whole
   exchange into one readable timeline, redacted per audience.
-- **Management console.** `org`, `timeline`, `events`, `agent`, `chat`, `approve`/`deny`, and
-  `recover` — an organization survives process restarts and reclaims executions orphaned by a
-  crash.
+- **Management console.** `agent create`, `task create`, `run`, `start`, `org`, `timeline`,
+  `events`, `agent`, `chat`, `approve`/`deny`, and `recover` — an organization survives
+  process restarts and reclaims executions orphaned by a crash.
 - **Contracts as the deliverable.** Fourteen JSON schemas as the source of truth (ADR 0011),
   thirty numbered cross-record invariants that JSON Schema cannot express, and a schema
   validator that runs with no Node installed so a contract break fails even when the
@@ -70,10 +78,15 @@ agree on. No package or GitHub release has been published yet.
   (`assertArgConfined`).
 - Delegated permissions are a strict subset of the manager's, enforced at the control plane.
 - Per-call budget checks bound model loops and discard intent from a response that crosses a
-  configured ceiling; provider charges may cross a ceiling before usage is known.
+  configured ceiling; provider charges may cross a ceiling before usage is known. Token
+  counters must remain finite, non-negative, exact JavaScript-safe integers. Malformed
+  permission scopes fail closed, and alternative grants cannot erase a valid budget ceiling.
+- Artifact collection validates every output before publication, uses collision-resistant
+  identities, and cannot delete a prior result during a duplicate or concurrent collection.
 - Audit-visibility event payloads are redacted for other audiences.
 - Registered provider credentials are redacted from model prompts and intent, command
-  arguments/results, provider errors, and persisted tool events (`CONTRACT_TESTS` #18).
+  arguments/results, provider errors, and persisted tool events, including credentials
+  supplied programmatically to an adapter (`CONTRACT_TESTS` #18).
 
 See [`SECURITY.md`](SECURITY.md) for the threat model — what the security boundary covers,
 and what it deliberately leaves to the operator.

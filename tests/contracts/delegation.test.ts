@@ -4,7 +4,7 @@
  */
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { isSubset } from "../../src/control-plane/permissions.ts";
+import { check, isSubset } from "../../src/control-plane/permissions.ts";
 import { makeCP, makeManager, MANAGER, stepFor } from "../helpers.ts";
 import type { AgentAction, Permission } from "../../src/domain/types.ts";
 
@@ -149,6 +149,29 @@ describe("delegation invariants", () => {
       }], [{ kind: "model.invoke" }]).ok,
       false,
       "a platform-default daily cap cannot be compared without its runtime value",
+    );
+  });
+
+  test("malformed scopes cannot authorize or bypass delegation ceilings", () => {
+    const malformed: Permission = {
+      kind: "model.invoke",
+      scope: { budget_usd_per_day: Number.NaN, max_tokens_per_execution: Number.POSITIVE_INFINITY },
+    };
+    assert.equal(check([malformed], { kind: "model.invoke" }).allowed, false);
+    assert.equal(
+      isSubset([malformed], [{
+        kind: "model.invoke",
+        scope: { budget_usd_per_day: 5, max_tokens_per_execution: 10_000 },
+      }]).ok,
+      false,
+    );
+    assert.equal(
+      isSubset([{
+        kind: "sandbox.create",
+        scope: { policy: "restricted", unexpected: "ignored" } as unknown as Permission["scope"],
+      }], [{ kind: "sandbox.create", scope: { policy: "restricted" } }]).ok,
+      false,
+      "unknown scope dimensions fail closed instead of being silently discarded",
     );
   });
 

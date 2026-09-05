@@ -1,0 +1,10 @@
+{
+  "sender_id": "human:operator",
+  "recipient_id": "repo-maintainer",
+  "objective": "Inspect the repository and identify the single highest-priority maintenance issue.",
+  "expected_output": "The issue, its impact, and concrete evidence.",
+  "constraints": [
+    "Do not make external changes without explicit approval."
+  ],
+  "priority": 1
+}

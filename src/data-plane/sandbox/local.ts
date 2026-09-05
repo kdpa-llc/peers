@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep, isAbsolute } from "node:path";
 import { promisify } from "node:util";
 import type { Artifact, Permission, PermissionKind } from "../../domain/types.ts";
+import { validGrants } from "../../control-plane/permissions.ts";
 import type { ExecResult, Sandbox, SandboxHandle, SandboxSpec } from "./adapter.ts";
 import { PathEscape } from "./adapter.ts";
 
@@ -289,10 +290,13 @@ export class LocalSandbox implements Sandbox {
     const root = await mkdtemp(join(tmpdir(), `peers-${spec.execution_id}-`));
     const real = await realpath(root);
     try {
+      // Sandbox is a public backend boundary, so do not assume every caller came through the
+      // control plane or CLI validator. Invalid alternatives confer no filesystem authority.
+      const grants = validGrants(spec.grants);
       const outputDir = join(real, "outputs");
       await mkdir(outputDir, { recursive: true });
 
-      const mounts = spec.mounts.flatMap((mount) => readableMounts(mount, spec.grants));
+      const mounts = spec.mounts.flatMap((mount) => readableMounts(mount, grants));
       for (const m of mounts) {
         const target = confine(real, m.target);
         await mkdir(dirname(target), { recursive: true });
@@ -310,7 +314,7 @@ export class LocalSandbox implements Sandbox {
       this.states.set(handle.id, {
         root: real,
         outputDir,
-        grants: spec.grants,
+        grants,
         timeoutMs: Math.max(1, Math.min(15_000, spec.timeout_seconds * 1000)),
       });
       return handle;
@@ -407,7 +411,7 @@ export class LocalSandbox implements Sandbox {
     if (!state || state.root !== handle.root || state.outputDir !== handle.outputDir) {
       throw new Error("unknown sandbox handle");
     }
-    const names = await readdir(handle.outputDir).catch(() => [] as string[]);
+    const names = (await readdir(handle.outputDir).catch(() => [] as string[])).sort();
     const candidates: { name: string; sourcePath: string; bytes: Buffer }[] = [];
 
     // Validate and read every candidate before making any durable write. Otherwise a bad
@@ -431,10 +435,16 @@ export class LocalSandbox implements Sandbox {
     if (candidates.length === 0) return [];
 
     const artifactRoot = await this.durableArtifactRoot();
-    const intendedDurableDir = join(artifactRoot, basename(handle.root), "outputs");
+    const intendedExecutionDir = join(artifactRoot, basename(handle.root));
+    const intendedDurableDir = join(intendedExecutionDir, "outputs");
     const out: Artifact[] = [];
+    let ownsExecutionDir = false;
     try {
-      await mkdir(intendedDurableDir, { recursive: true });
+      // Claim a unique directory without `recursive`: a duplicate/concurrent collection
+      // must fail without deleting files successfully published by the first collector.
+      await mkdir(intendedExecutionDir);
+      ownsExecutionDir = true;
+      await mkdir(intendedDurableDir);
       const durableDir = await realpath(intendedDurableDir);
       confine(artifactRoot, durableDir);
       for (const candidate of candidates) {
@@ -446,7 +456,9 @@ export class LocalSandbox implements Sandbox {
         );
         try { await durable.writeFile(candidate.bytes); } finally { await durable.close(); }
         out.push({
-          artifact_id: `art-${createHash("sha256").update(candidate.sourcePath).digest("hex").slice(0, 8)}`,
+          // Do not truncate this identity: a collision would make the control plane treat
+          // a newly persisted file as an existing artifact and leave the new file orphaned.
+          artifact_id: `art-${createHash("sha256").update(candidate.sourcePath).digest("hex")}`,
           kind: "file",
           uri: durablePath,
           content_hash: createHash("sha256").update(candidate.bytes).digest("hex"),
@@ -455,7 +467,9 @@ export class LocalSandbox implements Sandbox {
       }
     } catch (err) {
       // The directory name includes mkdtemp entropy and belongs to this execution only.
-      await rm(intendedDurableDir, { recursive: true, force: true }).catch(() => undefined);
+      if (ownsExecutionDir) {
+        await rm(intendedExecutionDir, { recursive: true, force: true }).catch(() => undefined);
+      }
       throw err;
     }
     return out;

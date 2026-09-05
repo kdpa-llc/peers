@@ -1,4 +1,4 @@
-# Two dev dependencies and one optional runtime dependency, so the npm surface is small —
+# Two development dependencies and one runtime dependency, so the npm surface is small —
 # but a public repository's actions are worth keeping current, and CI already caught one
 # deprecated runner. Grouped and capped to keep the PR volume near zero.
 version: 2
@@ -14,6 +14,14 @@ updates:
       development-dependencies:
         dependency-type: "development"
         update-types: ["minor", "patch"]
+    # Runtime and compiler majors are policy changes, not routine maintenance. Node type
+    # definitions must stay on the supported runtime major, and TypeScript majors get a
+    # dedicated migration PR with package/editor validation.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     labels: ["dependencies", "automated"]
     open-pull-requests-limit: 3
     # No semantic-release here, so prefixes are descriptive rather than load-bearing.

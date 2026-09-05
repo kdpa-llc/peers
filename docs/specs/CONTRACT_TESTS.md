@@ -67,7 +67,8 @@ reference — that is expected, not a schema bug. Load the whole directory.
     token authority caps requested provider output; post-call checks persist actual usage
     before allowing response tools or actions. A rejection moves the agent to `BLOCKED` with
     a human-attention flag. This is not a provider billing quota: one completed call may cross
-    a USD cap when its estimate was low.
+    a USD cap when its estimate was low. Missing, negative, non-finite, non-integral, or
+    inexact provider token counters fail closed, as does cumulative numeric overflow.
 11. **Usage and delegated limits.** Every terminal execution carries actual `usage`.
     Delegation cost/token limits and `model.invoke.max_tokens_per_execution` are checked on
     every turn. A response that crosses one is charged and recorded, but its tools/actions
