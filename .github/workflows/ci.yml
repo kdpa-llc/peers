@@ -24,7 +24,7 @@ jobs:
     name: typecheck, tests, console
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Node 22.6+ is required for node:sqlite and --experimental-strip-types,
       # matching the `engines` field in package.json.
@@ -64,7 +64,7 @@ jobs:
     name: schema validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
