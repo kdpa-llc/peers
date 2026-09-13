@@ -443,8 +443,9 @@ names and descriptions occupy context.
 
 ### [MCP Compression Proxy][mcp-compression-proxy]
 
-**Aggregate tools from multiple MCP servers with LLM-based description compression** — 50–80%
-token reduction across your tool surface.
+**Connect multiple MCP servers with progressive tool discovery and description compression.**
+The CLI loads selected schemas on demand; native MCP mode shortens descriptions while keeping
+input schemas visible. Context savings depend on your tools, client mode, and task.
 
 ## 💖 Support This Project
 
