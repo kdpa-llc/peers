@@ -16,6 +16,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import type { Permission } from "../../src/domain/types.ts";
 import type { ModelRequest } from "../../src/data-plane/model/adapter.ts";
 import {
@@ -317,6 +318,70 @@ test("openrouter is the same adapter behind a different base URL", () => {
     new OpenAIModelAdapter({ provider: "openrouter", model: "anthropic/claude-opus-4" }).name,
     "openrouter:anthropic/claude-opus-4",
   );
+});
+
+test("fetch endpoints trim only trailing slashes from the configured base URL", async (t) => {
+  const urls: string[] = [];
+  t.mock.method(globalThis, "fetch", async (url: string) => {
+    urls.push(url);
+    return Response.json({
+      choices: [{ message: { content: "done" } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    });
+  });
+
+  const cases = [
+    { baseURL: "https://example.test/v1", expected: "https://example.test/v1/chat/completions" },
+    { baseURL: "https://example.test/v1/", expected: "https://example.test/v1/chat/completions" },
+    { baseURL: "https://example.test/v1///", expected: "https://example.test/v1/chat/completions" },
+    { baseURL: "https://example.test//proxy///v1//", expected: "https://example.test//proxy///v1/chat/completions" },
+    { baseURL: "https://example.test/%2Fv1/", expected: "https://example.test/%2Fv1/chat/completions" },
+    { baseURL: "", expected: "/chat/completions" },
+    { baseURL: "///", expected: "/chat/completions" },
+  ];
+  for (const { baseURL, expected } of cases) {
+    await new OpenAIModelAdapter({ baseURL, apiKey: "test-key" }).complete(request());
+    assert.equal(urls.at(-1), expected);
+  }
+  for (const provider of ["openai", "openrouter"] as const) {
+    await new OpenAIModelAdapter({ provider, apiKey: "test-key" }).complete(request());
+    assert.equal(urls.at(-1), `${PRESETS[provider].baseURL}/chat/completions`);
+  }
+});
+
+test("long slash runs do not block endpoint construction", () => {
+  // The old trailing-slash regex retried every start in an internal slash run. Isolate
+  // this regression so a synchronous stall is killed instead of hanging the test runner.
+  // The generous watchdog is a hang guard, not a microbenchmark or a live provider call.
+  const moduleURL = new URL("../../src/data-plane/model/openai.ts", import.meta.url).href;
+  const script = `
+    import assert from "node:assert/strict";
+    import { OpenAIModelAdapter } from ${JSON.stringify(moduleURL)};
+    const slashes = "/".repeat(1_000_000);
+    const cases = [
+      ["https://example.test" + slashes + "v1", "https://example.test" + slashes + "v1"],
+      ["https://example.test/v1" + slashes, "https://example.test/v1"],
+      ["https://example.test" + slashes + "v1///", "https://example.test" + slashes + "v1"],
+    ];
+    for (const [baseURL, expected] of cases) {
+      let calls = 0;
+      globalThis.fetch = async (url) => {
+        calls++;
+        assert.equal(url, expected + "/chat/completions");
+        return Response.json({
+          choices: [{ message: { content: "done" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        });
+      };
+      await new OpenAIModelAdapter({ baseURL, apiKey: "test-key" }).complete(${JSON.stringify(request())});
+      assert.equal(calls, 1);
+    }
+  `;
+  const child = spawnSync(process.execPath, [
+    "--experimental-strip-types", "--no-warnings", "--input-type=module", "--eval", script,
+  ], { encoding: "utf8", timeout: 10_000 });
+  assert.ifError(child.error);
+  assert.equal(child.status, 0, child.stderr);
 });
 
 test("both providers offer the same tool surface for the same grants (#29)", async () => {
