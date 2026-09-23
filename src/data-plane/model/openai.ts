@@ -124,7 +124,11 @@ export class OpenAIModelAdapter implements ModelAdapter {
     this.provider = opts.provider ?? "openai";
     const preset = PRESETS[this.provider];
     this.model = opts.model ?? preset.model;
-    this.baseURL = (opts.baseURL ?? preset.baseURL).replace(/\/+$/, "");
+    const baseURL = opts.baseURL ?? preset.baseURL;
+    let end = baseURL.length;
+    // Scan only the suffix; a trailing-slash regex can backtrack over internal slash runs.
+    while (end > 0 && baseURL[end - 1] === "/") end--;
+    this.baseURL = baseURL.slice(0, end);
     this.apiKey = opts.apiKey ?? process.env[preset.keyEnv];
     this.name = `${this.provider}:${this.model}`;
     this.contextWindow = opts.contextWindow ?? 128_000;
