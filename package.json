@@ -1,7 +1,6 @@
 {
-  "name": "@kdpa-llc/peers",
+  "name": "peers-vault",
   "version": "0.1.0",
-  "private": true,
   "description": "A notes vault (Markdown or Emacs Org) where any folder can have its own AI agent you talk to. Agents run on T3 with Claude Code or Codex, in one container.",
   "keywords": [
     "ai-agents",
@@ -15,6 +14,7 @@
     "t3"
   ],
   "license": "MIT",
+  "author": "KDPA",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kdpa-llc/peers.git"
@@ -38,12 +38,14 @@
     "web/",
     "examples/vault/",
     "container/",
+    ".containerignore",
+    ".dockerignore",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "access": "public"
   },
   "engines": {
     "node": ">=22.13"

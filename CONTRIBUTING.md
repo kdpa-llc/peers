@@ -61,6 +61,18 @@ implement it; app code never talks to T3 directly.
 
 **Decisions get an ADR** in `docs/adr/`, numbered in sequence.
 
+## Releasing
+
+Releases go to npm as [`peers-vault`](https://www.npmjs.com/package/peers-vault) from GitHub
+Actions with npm trusted publishing, so no npm token is stored anywhere:
+
+```bash
+npm version patch          # or minor / major: bumps package.json and tags vX.Y.Z
+git push --follow-tags     # the Release workflow checks, publishes with provenance, and creates the GitHub release
+```
+
+Update `CHANGELOG.md` before tagging.
+
 ## Pull requests
 
 - Keep each change focused, with tests that cite the rule they enforce.

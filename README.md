@@ -4,6 +4,8 @@
 
 **A notes vault where any folder can have its own AI agent you talk to**
 
+[![npm version][npm-version-badge]][npm-package]
+[![npm downloads][npm-downloads-badge]][npm-package]
 [![License: MIT][license-badge]][license]
 [![Node][node-badge]][nodejs]
 [![Runtime deps][deps-badge]][package-json]
@@ -89,15 +91,16 @@ Agents are Claude Code or Codex sessions on [T3 Code][t3], signed in with their 
 ### 1. Install
 
 ```bash
-git clone https://github.com/kdpa-llc/peers.git
-cd peers
-npm install
+npm install -g peers-vault
 ```
+
+The package installs the `peers` command. You can also run it without installing:
+`npx peers-vault up ~/"Peers Vault" --demo`.
 
 ### 2. Start
 
 ```bash
-npm run peers -- up ~/"Peers Vault" --demo
+peers up ~/"Peers Vault" --demo
 ```
 
 The first run builds the container image (a few minutes). Peers prints a one-time link:
@@ -118,7 +121,7 @@ Open the link, go to **Settings → Bots**, and sign in Claude, Codex or both. P
 Want to look around first, without T3 or any account?
 
 ```bash
-npm run peers -- up /tmp/try --demo --scripted
+peers up /tmp/try --demo --scripted
 ```
 
 ### 🤖 Installing with an AI agent
@@ -137,7 +140,7 @@ Point your agent at this repository and ask it to install Peers. The steps in [A
 | `peers build` | Rebuild the container image |
 | `peers serve [dir]` | Run the server in this process (inside the container, development) |
 
-In a checkout, run them as `npm run peers -- <command>`.
+From a clone of this repository, run them as `npm run peers -- <command>`.
 
 **In the app**
 
@@ -151,8 +154,8 @@ In a checkout, run them as `npm run peers -- <command>`.
 
 ```bash
 tailscale serve --bg 4777
-npm run peers -- up ~/"Peers Vault" --origin https://<mac>.<tailnet>.ts.net
-npm run peers -- pair     # type the code on the phone
+peers up ~/"Peers Vault" --origin https://<mac>.<tailnet>.ts.net
+peers pair     # type the code on the phone
 ```
 
 ## 🔧 Configuration
@@ -358,6 +361,9 @@ Made with ❤️ by KDPA
 <!-- Reference Links -->
 <!-- Badges - Top of README -->
 
+[npm-version-badge]: https://img.shields.io/npm/v/peers-vault.svg
+[npm-package]: https://www.npmjs.com/package/peers-vault
+[npm-downloads-badge]: https://img.shields.io/npm/dm/peers-vault
 [license-badge]: https://img.shields.io/badge/License-MIT-yellow.svg
 [license]: https://opensource.org/licenses/MIT
 [node-badge]: https://img.shields.io/badge/node-%3E%3D22.13-brightgreen.svg

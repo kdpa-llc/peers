@@ -4,9 +4,9 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0] - 2026-11-07
 
-First version of Peers as a notes vault with agents. Nothing has been published to npm yet.
+First version of Peers as a notes vault with agents, published to npm as `peers-vault`.
 
 ### Added
 
