@@ -342,7 +342,7 @@ If you find Peers useful, please consider supporting its development!
 
 ## 📄 License
 
-MIT License - see [LICENSE][license-file] file. **Copyright © 2026 KDPA**
+MIT License - see [LICENSE][license-file] file. **Copyright © 2026 KDPA LLC**
 
 ## 🙏 Acknowledgments
 
