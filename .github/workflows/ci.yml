@@ -1,0 +1,61 @@
+# The test suite is deterministic: demo agents, a fixed clock, temporary folders. No account
+# and no network are needed, so CI runs exactly what a developer runs locally.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: typecheck, tests, package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The supported floor: Node 22.13 is the first release with node:sqlite unflagged.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck (server and web client)
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+
+      # Pack, install in a clean folder, and run the installed command and server.
+      - name: Installed package smoke test
+        run: npm run test:package
+
+  schemas:
+    name: schema validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - run: pip install jsonschema
+
+      # Deliberately no Node: a schema change that breaks the shapes Peers writes fails here
+      # even if the TypeScript still compiles.
+      - name: Validate docs/specs
+        run: python3 scripts/validate-schemas.py

@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/bot.schema.json",
+  "title": "Bot",
+  "description": "An agent's definition, stored as .peers/agents/<id>.json at the vault root (ADR 0003, ADR 0005). `path` is the folder or page it looks after; the layout (layout.schema.json) decides which folders and pages have agents. A change made outside Peers that adds automation or widens write scope waits for the owner's review (CONTRACT_TESTS #5).",
+  "type": "object",
+  "required": [
+    "id",
+    "name"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{2,80}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "path": {
+      "type": "string",
+      "maxLength": 512,
+      "description": "The folder or page this agent looks after, relative to the vault root; empty for the vault agent."
+    },
+    "color": {
+      "enum": [
+        "teal",
+        "indigo",
+        "amber",
+        "rose",
+        "green",
+        "violet",
+        "slate",
+        "orange"
+      ]
+    },
+    "instructions": {
+      "type": "string",
+      "maxLength": 20000
+    },
+    "model": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "description": "Which of the bots' T3 providers runs this bot (ADR 0003). Older definitions may name claude-code (read as claude), openai (read as codex), openrouter or scripted (ignored).",
+      "properties": {
+        "provider": {
+          "enum": [
+            "claude",
+            "codex",
+            "claude-code",
+            "openai",
+            "openrouter",
+            "scripted"
+          ]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "thinking": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      }
+    },
+    "write_scope": {
+      "enum": [
+        "folder",
+        "folder+resources",
+        "vault"
+      ],
+      "description": "Where the agent is asked to write: its own folder or page (and the page's folder of attachments), or the whole vault. 'folder+resources' from older definitions is read as 'folder'. Changes outside it are flagged to the owner."
+    },
+    "daily_budget_usd": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1000,
+      "description": "Kept for older definitions; bots run on the owner's Claude or ChatGPT plan and are not metered."
+    },
+    "paused": {
+      "type": "boolean"
+    },
+    "archived_from": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Where the folder or page was before \"Move to archive\", so Restore knows where it goes back."
+    },
+    "needs_review": {
+      "type": "boolean",
+      "description": "Set when a definition with an unseen id carries enabled triggers or a wide write scope, or when one changed outside Peers to add them. Its triggers stay off until the owner confirms it."
+    },
+    "triggers": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "kind",
+              "every",
+              "prompt"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "schedule"
+              },
+              "every": {
+                "enum": [
+                  "minutes",
+                  "hours",
+                  "day",
+                  "weekday",
+                  "week"
+                ]
+              },
+              "n": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1440
+              },
+              "at": {
+                "type": "string",
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+              },
+              "day": {
+                "enum": [
+                  "mon",
+                  "tue",
+                  "wed",
+                  "thu",
+                  "fri",
+                  "sat",
+                  "sun"
+                ]
+              },
+              "heartbeat": {
+                "type": "boolean"
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "kind",
+              "path",
+              "prompt"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "file_change"
+              },
+              "path": {
+                "type": "string",
+                "description": "Folder relative to the bot's folder; empty means the whole folder."
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "enabled": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

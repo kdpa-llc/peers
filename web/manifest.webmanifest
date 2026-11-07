@@ -1,0 +1,16 @@
+{
+  "name": "Peers",
+  "short_name": "Peers",
+  "description": "A vault where bots write the pages and you steer them.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F6",
+  "theme_color": "#0E7C7B",
+  "icons": [
+    { "src": "/web/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/web/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/web/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/web/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

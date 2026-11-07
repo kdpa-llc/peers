@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/layout.schema.json",
+  "title": "Layout",
+  "description": "A vault's .peers/layout.json (ADR 0005): which folders and pages have their own agent, as path patterns. `*` matches within one path segment and `**` any depth; a pattern ending in a page extension (.md, .markdown, .org) matches pages, any other matches folders. PARA, one agent per top-level folder, and a wiki are presets.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "preset": {
+      "enum": [
+        "para",
+        "folders",
+        "wiki",
+        "custom"
+      ]
+    },
+    "agents": {
+      "$ref": "#/$defs/paths",
+      "description": "Folders and pages that get their own agent."
+    },
+    "exclude": {
+      "$ref": "#/$defs/paths",
+      "description": "Exact paths a pattern would match that should not have an agent."
+    },
+    "paused": {
+      "$ref": "#/$defs/paths",
+      "description": "Agents here do nothing on their own and do not answer for pages (an archive)."
+    },
+    "inbox": {
+      "type": "string",
+      "description": "The folder or page the vault agent triages."
+    },
+    "archive": {
+      "type": "string",
+      "description": "Where \"Move to archive\" puts a folder or page."
+    },
+    "readonly": {
+      "$ref": "#/$defs/paths",
+      "description": "Generated content agents must not edit."
+    },
+    "hidden": {
+      "$ref": "#/$defs/paths",
+      "description": "Kept out of the tree; still searchable and readable by agents."
+    },
+    "rules": {
+      "$ref": "#/$defs/paths",
+      "maxItems": 20,
+      "description": "Files with standing rules every agent follows."
+    }
+  },
+  "$defs": {
+    "paths": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300,
+        "not": {
+          "pattern": "\\.\\."
+        }
+      }
+    }
+  }
+}

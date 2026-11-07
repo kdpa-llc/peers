@@ -1,0 +1,46 @@
+name: Feature Request
+description: Suggest a capability or a change of direction
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The most valuable requests describe a real friction you hit with your notes and
+        agents; the least valuable describe a missing checkbox.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you hitting?
+      description: The situation, not the solution. What did you try to do, and what got in the way?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you do about it?
+      description: Optional. If you have a design in mind, say so; the problem above is the part we need.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part does this touch?
+      options:
+        - Pages, marks and notes
+        - Agents and conversations
+        - Layouts (which folders have agents)
+        - The container and install
+        - Phone and desktop app
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues
+          required: true

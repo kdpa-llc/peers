@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/annotation.schema.json",
+  "title": "Annotation",
+  "description": "A note: one mark on a vault page plus the owner's instruction (docs/design/TECHNICAL.md §8). Drafts are stored as soon as a mark exists. A note is sent only when its quote, prefix and suffix match exactly one place in the current page; otherwise it becomes unresolved. When the bot's run ends, a note is applied if the text it marks changed, otherwise answered.",
+  "type": "object",
+  "required": ["annotation_id", "client_key", "path", "tool", "status", "created_at"],
+  "additionalProperties": false,
+  "$defs": {
+    "quote": {
+      "type": "object",
+      "required": ["exact"],
+      "additionalProperties": false,
+      "properties": {
+        "exact": {"type": "string", "maxLength": 4000},
+        "prefix": {"type": "string", "maxLength": 200},
+        "suffix": {"type": "string", "maxLength": 200}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lines": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 2, "maxItems": 2},
+        "quote": {"$ref": "#/$defs/quote"},
+        "label": {"type": "string", "maxLength": 200}
+      }
+    }
+  },
+  "properties": {
+    "annotation_id": {"type": "string"},
+    "client_key": {"type": "string", "minLength": 8, "maxLength": 80},
+    "path": {"type": "string"},
+    "doc_blob": {"type": ["string", "null"], "description": "sha256 of the page content the note was made against."},
+    "tool": {"enum": ["select", "pen", "arrow"]},
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lines": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 2, "maxItems": 2},
+        "quote": {"$ref": "#/$defs/quote"},
+        "label": {"type": "string", "maxLength": 200},
+        "to": {"$ref": "#/$defs/target"},
+        "page": {"type": "integer", "minimum": 1},
+        "region": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 1}, "minItems": 4, "maxItems": 4}
+      }
+    },
+    "ink": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "paths": {"type": "array", "items": {"type": "string", "maxLength": 20000}, "maxItems": 40},
+        "frame": {
+          "type": "object",
+          "required": ["width", "height"],
+          "additionalProperties": false,
+          "properties": {"width": {"type": "number"}, "height": {"type": "number"}}
+        }
+      }
+    },
+    "instruction": {"type": "string", "maxLength": 4000},
+    "attachment_id": {"type": ["string", "null"]},
+    "status": {"enum": ["draft", "sent", "working", "applied", "answered", "declined", "done", "unresolved", "failed"]},
+    "reason": {"type": ["string", "null"]},
+    "thread_id": {"type": ["string", "null"], "description": "The conversation the note was sent in (ADR 0003)."},
+    "bot_id": {"type": ["string", "null"]},
+    "sent_at": {"type": ["string", "null"], "format": "date-time"},
+    "sent_blob": {"type": ["string", "null"], "description": "sha256 of the page when the note was sent; its outcome compares the page after the run with this version."},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

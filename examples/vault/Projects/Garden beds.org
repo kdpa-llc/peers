@@ -1,0 +1,23 @@
+#+TITLE: Garden beds
+#+FILETAGS: :project:home:
+
+* NEXT [#A] Order soil for the raised beds :shopping:
+SCHEDULED: <2026-11-09 Mon> DEADLINE: <2026-11-14 Sat>
+:PROPERTIES:
+:CREATED: [2026-10-30]
+:COST: 180
+:END:
+Two cubic metres of mixed topsoil and compost. Compare the quotes in [[file:../Resources/Reading Notes][reading notes]] before ordering.
+
+* WAITING Quote from the timber yard
+* DONE Measure the beds
+
+* Plan
+| Bed   | Size      | Plants            |
+|-------+-----------+-------------------|
+| North | 2.4 × 1.2 | Garlic, onions    |
+| South | 2.4 × 1.2 | Tomatoes, basil   |
+
+- [X] Pick the spot with six hours of sun
+- [ ] Build the frames
+- Budget :: about 450 for timber, soil and screws

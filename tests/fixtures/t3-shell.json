@@ -1,0 +1,43 @@
+{
+ "schemaVersion": 2,
+ "projects": [
+  {
+   "id": "66308275-6d51-45c1-aae6-49026496d84e",
+   "title": "Website Relaunch",
+   "workspaceRoot": "/vault/Projects/Website Relaunch",
+   "createdAt": "2026-11-06T20:36:50.135Z",
+   "updatedAt": "2026-11-06T20:36:50.135Z",
+   "archivedAt": null
+  }
+ ],
+ "threads": [
+  {
+   "id": "0e90dd1f-5fa6-44dd-96c8-1494dd06e263",
+   "projectId": "66308275-6d51-45c1-aae6-49026496d84e",
+   "title": "Launch date check",
+   "status": "completed",
+   "activeRunId": null,
+   "latestRunId": "run:thread:0e90dd1f-5fa6-44dd-96c8-1494dd06e263:ordinal:1",
+   "latestRunCompletedAt": "2026-11-06T21:30:34.266Z",
+   "lastError": null,
+   "lastErrorClass": null,
+   "pendingRuntimeRequest": null,
+   "createdAt": "2026-11-06T21:30:31.408Z",
+   "updatedAt": "2026-11-06T21:30:34.266Z",
+   "archivedAt": null,
+   "deletedAt": null,
+   "modelSelection": {
+    "instanceId": "claudeAgent",
+    "model": "claude-sonnet-5-5",
+    "options": [
+     {
+      "id": "effort",
+      "value": "low"
+     }
+    ]
+   },
+   "latestVisibleMessage": null
+  }
+ ],
+ "archivedThreads": []
+}

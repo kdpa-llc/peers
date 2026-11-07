@@ -1,0 +1,97 @@
+/* Design tokens. Day and Night share structure; only these values change (PRODUCT.md §10). */
+
+:root {
+  color-scheme: light;
+  --bg: #FAF9F6;
+  --panel: #F3F1EC;
+  --surface: #FFFFFF;
+  --surface-2: #F7F5F0;
+  --hover: rgba(31, 35, 40, 0.05);
+  --active: rgba(14, 124, 123, 0.10);
+  --text: #1F2328;
+  --text-2: #3D4248;
+  --muted: #6B6F76;
+  --faint: #9A9EA5;
+  --line: #E4E1DA;
+  --line-strong: #D5D1C8;
+  --accent: #0E7C7B;
+  --accent-text: #0B6766;
+  --accent-soft: rgba(14, 124, 123, 0.12);
+  --accent-contrast: #FFFFFF;
+  --attention: #B7791F;
+  --attention-soft: rgba(232, 163, 61, 0.18);
+  --danger: #C2412D;
+  --danger-soft: rgba(194, 65, 45, 0.10);
+  --success: #2F855A;
+  --changed: rgba(14, 124, 123, 0.07);
+  --ink: #0E7C7B;
+  --highlight: rgba(232, 163, 61, 0.32);
+  --code-bg: #F1EEE7;
+  --shadow-float: 0 8px 24px rgba(20, 22, 26, 0.08), 0 1px 2px rgba(20, 22, 26, 0.06);
+  --shadow-pop: 0 16px 40px rgba(20, 22, 26, 0.14), 0 2px 6px rgba(20, 22, 26, 0.08);
+  --scrim: rgba(20, 22, 26, 0.28);
+
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-read: "New York", "Iowan Old Style", ui-serif, "Charter", Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --r-control: 6px;
+  --r-card: 10px;
+  --r-pill: 999px;
+  --tree-w: 248px;
+  --bot-w: 380px;
+  --rail-w: 44px;
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Bot hues: chosen by hash of the bot id, editable in Setup. */
+  --hue-teal: #0E7C7B;
+  --hue-indigo: #4F5BD5;
+  --hue-amber: #B7791F;
+  --hue-rose: #C2416C;
+  --hue-green: #2F855A;
+  --hue-violet: #7E57C2;
+  --hue-slate: #52606D;
+  --hue-orange: #C05621;
+}
+
+:root[data-theme="night"] {
+  color-scheme: dark;
+  --bg: #0F1216;
+  --panel: #151A20;
+  --surface: #1B2129;
+  --surface-2: #181D24;
+  --hover: rgba(230, 232, 235, 0.06);
+  --active: rgba(63, 184, 180, 0.14);
+  --text: #E6E8EB;
+  --text-2: #C9CDD2;
+  --muted: #9AA1AA;
+  --faint: #6E7680;
+  --line: #262D36;
+  --line-strong: #323A45;
+  --accent: #3FB8B4;
+  --accent-text: #5ED1CC;
+  --accent-soft: rgba(63, 184, 180, 0.16);
+  --accent-contrast: #0B1F1F;
+  --attention: #E8A33D;
+  --attention-soft: rgba(232, 163, 61, 0.18);
+  --danger: #F07A5F;
+  --danger-soft: rgba(240, 122, 95, 0.14);
+  --success: #63C08A;
+  --changed: rgba(63, 184, 180, 0.08);
+  --ink: #5ED1CC;
+  --highlight: rgba(232, 163, 61, 0.30);
+  --code-bg: #1E252E;
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --scrim: rgba(0, 0, 0, 0.5);
+
+  --hue-teal: #3FB8B4;
+  --hue-indigo: #8B94F0;
+  --hue-amber: #E8A33D;
+  --hue-rose: #EC7FA3;
+  --hue-green: #63C08A;
+  --hue-violet: #B39DDB;
+  --hue-slate: #9AA5B1;
+  --hue-orange: #F0A060;
+}

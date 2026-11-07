@@ -1,0 +1,52 @@
+{
+ "projection": {
+  "thread": {
+   "id": "0e90dd1f-5fa6-44dd-96c8-1494dd06e263",
+   "projectId": "66308275-6d51-45c1-aae6-49026496d84e",
+   "title": "Launch date check",
+   "createdAt": "2026-11-06T21:30:31.408Z",
+   "updatedAt": "2026-11-06T21:30:34.266Z",
+   "modelSelection": {
+    "instanceId": "claudeAgent",
+    "model": "claude-sonnet-5-5",
+    "options": [
+     {
+      "id": "effort",
+      "value": "low"
+     }
+    ]
+   },
+   "runtimeMode": "auto",
+   "archivedAt": null,
+   "deletedAt": null
+  },
+  "runs": [
+   {
+    "id": "run:thread:0e90dd1f-5fa6-44dd-96c8-1494dd06e263:ordinal:1",
+    "status": "completed",
+    "ordinal": 1,
+    "requestedAt": "2026-11-06T21:30:31.417Z",
+    "startedAt": "2026-11-06T21:30:31.443Z",
+    "completedAt": "2026-11-06T21:30:34.266Z"
+   }
+  ],
+  "messages": [
+   {
+    "id": "515f1c7f-2d90-422d-a4de-ef3e9c8e0328",
+    "role": "user",
+    "text": "Read Launch plan.md in this folder and tell me the launch date in one short sentence. Do not edit any file.",
+    "streaming": false,
+    "createdAt": "2026-11-06T21:30:31.417Z",
+    "runId": "run:thread:0e90dd1f-5fa6-44dd-96c8-1494dd06e263:ordinal:1"
+   },
+   {
+    "id": "message:provider:claudeAgent:native-item:583fc16c-3430-4bee-b909-a859dfc893bc",
+    "role": "assistant",
+    "text": "The launch date is March 14.",
+    "streaming": false,
+    "createdAt": "2026-11-06T21:30:34.249Z",
+    "runId": "run:thread:0e90dd1f-5fa6-44dd-96c8-1494dd06e263:ordinal:1"
+   }
+  ]
+ }
+}

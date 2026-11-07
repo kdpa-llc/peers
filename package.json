@@ -1,0 +1,70 @@
+{
+  "name": "@kdpa-llc/peers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A notes vault (Markdown or Emacs Org) where any folder can have its own AI agent you talk to. Agents run on T3 with Claude Code or Codex, in one container.",
+  "keywords": [
+    "ai-agents",
+    "notes",
+    "vault",
+    "para",
+    "obsidian",
+    "org-mode",
+    "claude-code",
+    "codex",
+    "t3"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kdpa-llc/peers.git"
+  },
+  "homepage": "https://github.com/kdpa-llc/peers#readme",
+  "bugs": {
+    "url": "https://github.com/kdpa-llc/peers/issues"
+  },
+  "type": "module",
+  "bin": {
+    "peers": "./bin/peers.js"
+  },
+  "exports": {
+    "./schemas/*.json": "./docs/specs/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "docs/specs/",
+    "web/",
+    "examples/vault/",
+    "container/",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "prebuild": "node scripts/clean-dist.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "postbuild": "node scripts/fix-declaration-imports.mjs",
+    "prepack": "npm run build",
+    "peers": "node --experimental-strip-types --no-warnings src/cli/main.ts",
+    "dev": "node --experimental-strip-types --no-warnings src/cli/main.ts serve",
+    "test": "node --experimental-strip-types --no-warnings --test \"tests/**/*.test.ts\"",
+    "test:e2e": "node scripts/e2e.mjs",
+    "test:package": "node scripts/package-smoke.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.5.438"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "typescript": "^5.9.3"
+  }
+}

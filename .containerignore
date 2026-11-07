@@ -1,0 +1,8 @@
+.git
+node_modules
+.e2e-shots
+docs
+tests
+sandboxes
+tmp
+*.tgz

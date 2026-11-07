@@ -1,0 +1,21 @@
+{
+ "_tag": "Chunk",
+ "requestId": "2",
+ "values": [
+  {
+   "kind": "thread.updated",
+   "sequence": 21,
+   "location": "active",
+   "thread": {
+    "id": "0e90dd1f-5fa6-44dd-96c8-1494dd06e263",
+    "projectId": "66308275-6d51-45c1-aae6-49026496d84e",
+    "title": "Launch date check",
+    "status": "running",
+    "activeRunId": "run:thread:0e90dd1f-5fa6-44dd-96c8-1494dd06e263:ordinal:1",
+    "updatedAt": "2026-11-06T21:30:31.443Z",
+    "lastError": null,
+    "pendingRuntimeRequest": null
+   }
+  }
+ ]
+}

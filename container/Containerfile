@@ -1,0 +1,47 @@
+# Peers in one container (ADR 0004): the vault server, the agents' T3, Claude Code and
+# Codex. The container sees only /vault (the vault folder) and /state (app state and the
+# agents' sign-ins), both mounted from the host. Build and run it with `peers up`.
+FROM docker.io/library/node:24-trixie-slim
+
+ARG T3_VERSION=0.1.7
+ARG TARGETARCH
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl git ripgrep tini procps less python3 \
+ && rm -rf /var/lib/apt/lists/*
+
+# T3 Code's self-contained Linux build, checked against the release's SHA256SUMS.
+RUN set -eu; \
+    case "${TARGETARCH:-$(dpkg --print-architecture)}" in arm64) key=linux-arm64 ;; amd64) key=linux-x64 ;; *) echo "unsupported arch" >&2; exit 1 ;; esac; \
+    base="https://github.com/pingdotgg/t3code/releases/download/v${T3_VERSION}"; \
+    archive="t3-${T3_VERSION}-${key}.tar.gz"; \
+    cd /tmp; \
+    curl -fsSLO "${base}/${archive}"; \
+    curl -fsSL "${base}/SHA256SUMS" | grep " \*\?${archive}\$" | sed 's/ \*/  /' | sha256sum -c -; \
+    mkdir -p /opt/t3; tar -xzf "${archive}" -C /opt/t3 --strip-components=1; rm "${archive}"; \
+    /opt/t3/t3 --version
+
+# The agents' tools. Their sign-ins live in /state/agents, never in the image.
+RUN npm install -g @anthropic-ai/claude-code @openai/codex && npm cache clean --force
+
+WORKDIR /app
+# The app as npm would install it: compiled JavaScript, the web client and the demo vault.
+COPY package.json package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev --ignore-scripts; else npm install --omit=dev --ignore-scripts; fi \
+ && npm cache clean --force
+COPY bin ./bin
+COPY dist ./dist
+COPY web ./web
+COPY examples ./examples
+
+RUN mkdir -p /vault /state && chown node:node /vault /state
+USER node
+ENV HOME=/home/node \
+    PEERS_STATE_DIR=/state/vaults \
+    PEERS_AGENT_HOMES=/state/agents \
+    PEERS_T3_BIN=/opt/t3/t3 \
+    PEERS_IN_CONTAINER=1
+
+EXPOSE 4777
+ENTRYPOINT ["tini", "--", "node", "/app/bin/peers.js"]
+CMD ["serve", "/vault", "--host", "0.0.0.0", "--port", "4777"]

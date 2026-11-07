@@ -1,0 +1,68 @@
+name: Bug Report
+description: Something does not work the way the docs say it should
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The reproduction matters more than the description. If you can express the bug as a
+        failing test against `tests/`, that is the most useful form it can take. Please leave
+        out anything private from your notes.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you observed, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >
+        Steps, or the exact commands (`npm run peers -- up …`). A small demo vault
+        (`--demo`) that shows the problem is ideal.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Which agents?
+      options:
+        - Claude Code (on T3, in the container)
+        - Codex (on T3, in the container)
+        - Demo agents (--scripted, or npm test)
+        - Not applicable / unsure
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: "`node --version`, your OS version, and `container --version`"
+      placeholder: v22.20.1 · macOS 26.1 · container 1.6.1
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: >
+        Relevant output, for example from `npm run peers -- logs`. Please redact anything
+        sensitive.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am not reporting a security vulnerability (those go through SECURITY.md, privately)
+          required: true

@@ -1,0 +1,17 @@
+# Review ownership. The last matching pattern wins.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @moscaverd
+
+# Contracts: schemas, numbered rules and decisions.
+/docs/specs/                @moscaverd
+/docs/adr/                  @moscaverd
+
+# The trust boundary: the HTTP server, paths, the container, the agents' runtime.
+/src/vault/server.ts        @moscaverd
+/src/vault/paths.ts         @moscaverd
+/src/vault/t3/              @moscaverd
+/container/                 @moscaverd
+/SECURITY.md                @moscaverd
+
+/.github/                   @moscaverd
