@@ -81,6 +81,17 @@ CASES: list[tuple[str, str, dict, bool]] = [
     }, True),
     ("Layout with a parent-folder path", "Layout", {"agents": ["../outside"]}, False),
     ("Layout with an unknown field", "Layout", {"agents": [], "roots": {}}, False),
+    ("App (peers.app.json) for a dashboard", "App", {
+        "name": "Projects board", "entry": "index.html", "reads": ["Projects/**", "Areas/*/README.md"],
+        "network": ["https://cdn.jsdelivr.net", "https://*.example.com:8443"],
+    }, True),
+    ("App with no fields", "App", {}, True),
+    ("App reading a dot folder", "App", {"reads": [".peers/agents"]}, False),
+    ("App reading outside the vault", "App", {"reads": ["../secrets"]}, False),
+    ("App asking for plain-HTTP network access", "App", {"network": ["http://example.com"]}, False),
+    ("App asking for a network path, not an origin", "App", {"network": ["https://example.com/api"]}, False),
+    ("App entry that is not a page", "App", {"entry": "app.js"}, False),
+    ("App entry outside its folder", "App", {"entry": "/index.html"}, False),
     ("Agent definition from an older version", "Bot", {
         "id": "bot-x-123", "name": "X", "model": {"provider": "claude-code", "thinking": "low"}, "daily_budget_usd": 5,
     }, True),

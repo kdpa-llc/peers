@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kdpa-llc.github.io/peers/specs/app.schema.json",
+  "title": "App",
+  "description": "An app folder's peers.app.json (ADR 0006). The folder is a small web app that Peers shows in a sandboxed frame: its own files, plus read-only access to the vault paths listed in `reads`. Internet access to the origins in `network` waits until the owner allows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "What the tree and the app's header call it. Defaults to the folder's name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "entry": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?!/)(?!.*(^|/)\\.)(?!.*\\\\)[^\\u0000-\\u001f]*\\.html?$",
+      "description": "The page that opens first, relative to the app folder. Defaults to index.html."
+    },
+    "reads": {
+      "type": "array",
+      "maxItems": 50,
+      "description": "Vault paths the app may read besides its own folder, as layout patterns (`*` within one segment, `**` any depth). A folder pattern covers everything inside it.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300,
+        "not": {
+          "anyOf": [
+            { "pattern": "\\.\\." },
+            { "pattern": "(^|/)\\." },
+            { "pattern": "^/" }
+          ]
+        }
+      }
+    },
+    "network": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "HTTPS origins the app may load from and talk to, once the owner allows it, for example a CDN or an API. A leading `*.` covers subdomains.",
+      "items": {
+        "type": "string",
+        "pattern": "^https://(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?$"
+      }
+    }
+  }
+}

@@ -21,8 +21,10 @@ export type State = {
   tree: TreeNode | null;
   /** Folder or page path → the agent that looks after it. */
   owners: Record<string, string>;
-  /** Folder path → its front page. */
+  /** Folder path → its front page (an app folder's: the page its app opens). */
   fronts: Record<string, string>;
+  /** App folders (ADR 0006). */
+  apps: string[];
   /** Generated content, edited only through its source. */
   readonly: string[];
   inbox: string | null;
@@ -76,6 +78,7 @@ export const store = new Store<State>({
   tree: null,
   owners: {},
   fronts: {},
+  apps: [],
   readonly: [],
   inbox: null,
   archive: null,
@@ -184,7 +187,7 @@ export function loadBotsSoon(): void {
 export async function loadTree(): Promise<void> {
   const t = await api.get("/api/tree");
   store.set({
-    tree: t.tree, owners: t.owners, fronts: t.fronts ?? {}, readonly: t.readonly ?? [],
+    tree: t.tree, owners: t.owners, fronts: t.fronts ?? {}, apps: t.apps ?? [], readonly: t.readonly ?? [],
     inbox: t.inbox ?? null, archive: t.archive ?? null, changed: t.changed,
   });
 }

@@ -13,7 +13,8 @@ Decisions: [ADR 0001](../adr/0001-a-notes-vault-with-agents.md) (the product),
 [0002](../adr/0002-plain-module-web-client.md) (plain module client, own parsers),
 [0003](../adr/0003-agents-on-embedded-t3.md) (agents on an embedded T3),
 [0004](../adr/0004-backend-in-a-container.md) (one container),
-[0005](../adr/0005-folder-agents-and-layouts.md) (any folder or page can have an agent).
+[0005](../adr/0005-folder-agents-and-layouts.md) (any folder or page can have an agent),
+[0006](../adr/0006-app-pages-in-a-sandbox.md) (apps in a sandboxed frame).
 
 ## Screenshots
 

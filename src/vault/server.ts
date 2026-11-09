@@ -14,6 +14,7 @@ import { dirname, extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as nodeModule from "node:module";
 import { BadRequest, HttpError, statusFor, type VaultApp } from "./app.ts";
+import { appCsp, appData, appFile, canRead, type AppReply, type AppSession } from "./apps.ts";
 import { validateDef } from "./bots.ts";
 import { checkRead } from "./paths.ts";
 
@@ -203,16 +204,25 @@ export class VaultServer {
   private async handle(req: Req, res: ServerResponse): Promise<void> {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "no-referrer");
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     if (!this.allowedHosts().has(this.hostOf(req))) {
       return this.send(res, 421, { error: "unknown host" });
     }
     const url = new URL(req.url, "http://local");
     const ctx: Ctx = { req, res, url };
+    // App frames: their own policy, framed by Peers only (ADR 0006).
+    if (url.pathname.startsWith("/apps/")) return this.serveApp(ctx);
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     if (!url.pathname.startsWith("/api/")) return this.serveStatic(ctx);
 
+    // The API answers Peers' own pages only: never an opaque-origin app frame, never another
+    // site (CONTRACT_TESTS #6). The SameSite=Strict cookie already keeps the session out of
+    // such requests; these refuse them before they reach a route.
+    const site = String(req.headers["sec-fetch-site"] ?? "");
+    if (req.headers.origin === "null" || (site && site !== "same-origin" && site !== "none")) {
+      return this.send(res, 403, { error: "cross-origin request refused" });
+    }
     const method = req.method ?? "GET";
     if (method !== "GET" && method !== "HEAD") {
       if (req.headers["x-peers"] !== "1") return this.send(res, 403, { error: "missing X-Peers header" });
@@ -401,8 +411,16 @@ export class VaultServer {
     }
     if (method === "DELETE" && (match = m(/^\/api\/devices\/([\w-]+)$/))) {
       app.db.prepare("UPDATE vault_devices SET revoked_at = ? WHERE device_id = ?").run(app.clock.now().toISOString(), match[1]!);
+      app.appSessions.revokeDevice(match[1]!);
       return this.send(res, 200, { ok: true });
     }
+    if (method === "POST" && p === "/api/apps/open") return this.send(res, 200, app.openApp(String((await this.json(ctx.req)).path ?? ""), ctx.device!));
+    if (method === "POST" && p === "/api/apps/grant") {
+      const b = await this.json(ctx.req);
+      const network = Array.isArray(b.network) ? b.network.map(String).slice(0, 20) : [];
+      return this.send(res, 200, app.grantApp(String(b.root ?? ""), network));
+    }
+    if (method === "POST" && p === "/api/apps/revoke") return this.send(res, 200, app.revokeApp(String((await this.json(ctx.req)).root ?? "")));
     if (method === "GET" && p === "/api/events") return this.events(ctx);
     return this.send(res, 404, { error: "not found" });
   }
@@ -430,6 +448,75 @@ export class VaultServer {
     }
     write(`${bus.epoch}:${bus.current}`, "hello", { epoch: bus.epoch, seq: bus.current });
     const unsubscribe = bus.subscribe((e) => write(`${bus.epoch}:${e.seq}`, e.type, e.data));
+    const keepalive = setInterval(() => res.write(": keepalive\n\n"), 25_000);
+    this.sse.add(res);
+    req.on("close", () => {
+      clearInterval(keepalive);
+      unsubscribe();
+      this.sse.delete(res);
+    });
+  }
+
+  // ------------------------------------------------------------------ app frames (ADR 0006)
+
+  /** The origin the browser used, as CSP has to name it (ADR 0006 §7). */
+  private browserOrigin(req: Req): string {
+    return `${this.isSecure(req) ? "https" : "http"}://${this.hostOf(req)}`;
+  }
+
+  /**
+   * Everything under `/apps/<token>/`: the app's files, and under `_peers/` its read-only data
+   * API. No session is read or needed here; the token is the capability.
+   */
+  private serveApp(ctx: Ctx): void {
+    const { req, res, url } = ctx;
+    const method = req.method ?? "GET";
+    const m = /^\/apps\/([A-Za-z0-9_-]{20,64})\/(.*)$/.exec(url.pathname);
+    const session = m ? this.app.appSessions.get(m[1]!, this.app.clock.now()) : undefined;
+    // The frame's origin is opaque, so its module scripts and fetches are CORS requests.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "no-store");
+    if (!session) {
+      res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'");
+      return this.send(res, 404, { error: "this app link has expired; open the app again" });
+    }
+    res.setHeader("Content-Security-Policy", appCsp(this.browserOrigin(req), session.token, session.network));
+    if (method === "OPTIONS") {
+      res.writeHead(204, { "Access-Control-Allow-Methods": "GET, HEAD", "Access-Control-Max-Age": "600" });
+      return void res.end();
+    }
+    if (method !== "GET" && method !== "HEAD") return this.send(res, 405, { error: "apps read the vault; they do not change it" });
+    let sub: string;
+    try {
+      sub = decodeURIComponent(m![2]!);
+    } catch {
+      return this.send(res, 400, { error: "bad path" });
+    }
+    const parts = sub.split("/");
+    const api = parts.indexOf("_peers");
+    let reply: AppReply;
+    if (api >= 0) {
+      const name = parts.slice(api + 1).join("/");
+      if (name === "events") return this.appEvents(ctx, session);
+      reply = appData(this.app.root, session, name, url.searchParams);
+    } else {
+      reply = appFile(this.app.root, session, sub);
+    }
+    const body = typeof reply.body === "string" ? Buffer.from(reply.body) : reply.body;
+    res.writeHead(reply.status, { "Content-Type": reply.type, "Content-Length": String(body.length) });
+    res.end(method === "HEAD" ? undefined : body);
+  }
+
+  /** Change events for what an app can read. */
+  private appEvents(ctx: Ctx, session: AppSession): void {
+    const { req, res } = ctx;
+    res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+    res.write(": hello\n\n");
+    const unsubscribe = this.app.bus.subscribe((e) => {
+      if (e.type !== "file.changed" || !Array.isArray(e.data.paths)) return;
+      const paths = (e.data.paths as unknown[]).filter((p): p is string => typeof p === "string" && canRead(session.app, p));
+      if (paths.length) res.write(`event: change\ndata: ${JSON.stringify({ paths })}\n\n`);
+    });
     const keepalive = setInterval(() => res.write(": keepalive\n\n"), 25_000);
     this.sse.add(res);
     req.on("close", () => {

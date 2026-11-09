@@ -15,9 +15,12 @@ import { attachInk, markingBusy, mountPeek, mountToolPill } from "./notes.ts";
 import { renderSettings } from "./settings.ts";
 import { renderBotSettings } from "./botsettings.ts";
 import { renderToday } from "./today.ts";
+import { renderApp } from "./apppage.ts";
 import { toggleTreePane } from "./tree.ts";
 
 let lastRendered = "";
+/** The app page on screen, as path@hash. */
+let appShown = "";
 
 export function mountPage(pane: HTMLElement): void {
   const head = h("header", { class: "page-head" });
@@ -35,15 +38,26 @@ export function mountPage(pane: HTMLElement): void {
       deferred = window.setTimeout(render, 600);
       return;
     }
+    // An app keeps its frame (and whatever is going on in it) until its page changes.
+    if (s.route.view === "page" && s.page?.kind === "app" && key === lastRendered && appShown === `${s.page.path}@${s.page.hash}` &&
+      scroll.querySelector(".app-view")) {
+      replace(head, header());
+      return;
+    }
     const keepScroll = key === lastRendered ? scroll.scrollTop : 0;
     lastRendered = key;
+    appShown = "";
     replace(head, header());
     if (s.route.view === "today") replace(scroll, renderToday());
     else if (s.route.view === "settings") replace(scroll, renderSettings());
     else if (s.route.view === "bot") replace(scroll, renderBotSettings(s.route.id));
     else if (s.pageError) replace(scroll, h("div", { class: "today" }, h("h1", null, "Can't open this page"), h("p", { class: "sub" }, s.pageError)));
     else if (!s.page) replace(scroll, h("div", { class: "today" }, h("p", { class: "sub" }, "Loading…")));
-    else replace(scroll, renderPage(s.page));
+    else if (s.page.kind === "app") {
+      appShown = `${s.page.path}@${s.page.hash}`;
+      replace(scroll, renderApp(s.page));
+    } else replace(scroll, renderPage(s.page));
+    scroll.classList.toggle("app-mode", s.route.view === "page" && s.page?.kind === "app");
     scroll.scrollTop = keepScroll;
   };
   store.on(["route", "page", "pageError", "layoutTick", "today", "bots"], (s, changed) => {
@@ -67,11 +81,13 @@ function header(): Node {
   const tabletTree = h("button", { class: "icon-btn tree-toggle-inline", "aria-label": "Show vault", onclick: () => toggleTreePane() }, icon("menu", 17));
   if (s.route.view === "page") {
     const parts = s.route.path.split("/");
+    // An app's index page is the app folder itself.
+    if (s.page?.kind === "app" && parts.length > 1 && /^index\.html?$/i.test(parts[parts.length - 1]!)) parts.pop();
     parts.forEach((p, i) => {
       if (i > 0) crumbs.append(h("span", { class: "sep" }, "/"));
       const isLast = i === parts.length - 1;
       crumbs.append(isLast
-        ? h("span", { class: "current" }, p.replace(/\.(md|markdown|org)$/i, ""))
+        ? h("span", { class: "current" }, p.replace(/\.(md|markdown|org|html?)$/i, ""))
         : h("a", { href: "#", onclick: (e: Event) => { e.preventDefault(); revealFolder(parts.slice(0, i + 1).join("/")); } }, p));
     });
   } else {

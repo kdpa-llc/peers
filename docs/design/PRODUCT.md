@@ -165,6 +165,12 @@ edits the image or PDF itself.
 **Empty page**: a new page has only a title. The body shows "Tell Website Relaunch what this
 page is for" with a text field. Submitting sends a chat message with the page attached.
 
+**Apps.** An `.html` page, or a folder with `peers.app.json`, opens as an app filling the
+pane: a dashboard, a chart, a small tool an agent built. A thin bar above it gives its name,
+what it reads (`Reads its folder and 1 more`), and `Offline` or the sites it may reach. When
+its manifest asks for a site you have not allowed, the bar says so with **Allow**. The app
+can open a vault page, or propose a message to its folder's agent, which you confirm.
+
 ### 4.3 Right: the bot
 
 **Following**: the panel shows the bot that owns the open page. Opening a page in another

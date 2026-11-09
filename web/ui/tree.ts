@@ -41,7 +41,7 @@ export function mountTree(pane: HTMLElement): void {
     replace(themeBtn, icon(s.theme === "night" ? "moon" : s.theme === "day" ? "sun" : "contrast", 17));
     replace(scroll, renderTree());
   };
-  store.on(["tree", "bots", "expanded", "route", "changed", "theme", "today", "owners", "fronts"], render);
+  store.on(["tree", "bots", "expanded", "route", "changed", "theme", "today", "owners", "fronts", "apps"], render);
   render();
 }
 
@@ -136,9 +136,9 @@ function node(n: TreeNode, current: string, depth: number): Node {
     },
       h("span", { class: "twisty" }),
       // A page with its own agent shows the agent.
-      bot ? avatar(bot, 18) : h("span", { class: "file-icon" }, icon(n.kind === "pdf" ? "pdf" : n.kind === "image" || n.kind === "svg" ? "image" : "file", 15)),
+      bot ? avatar(bot, 18) : h("span", { class: "file-icon" }, icon(n.kind === "pdf" ? "pdf" : n.kind === "image" || n.kind === "svg" ? "image" : n.kind === "app" ? "app" : "file", 15)),
       // A page agent is shown by its name ("Personal website"), not its file name.
-      h("span", { class: "label", title: n.path }, bot ? bot.name : n.name.replace(/\.(md|markdown|org)$/i, "")),
+      h("span", { class: "label", title: n.path }, bot ? bot.name : n.name.replace(/\.(md|markdown|org|html?)$/i, "")),
       isReadonly(n.path) ? h("span", { class: "tree-tag", title: "Generated: edit the source note" }, icon("lock", 11)) : null,
       bot ? statusDot(bot) : null,
       changed ? h("span", { class: "dot changed", title: "Changed since you last looked" }) : null);
@@ -159,8 +159,9 @@ function node(n: TreeNode, current: string, depth: number): Node {
     oncontextmenu: (e: MouseEvent) => { e.preventDefault(); folderMenu(n, botId, { x: e.clientX, y: e.clientY }); },
   },
     h("span", { class: "twisty" }, icon(open ? "chevronDown" : "chevronRight", 12)),
-    bot ? avatar(bot, 18) : h("span", { class: "file-icon" }, icon("folder", 15)),
+    bot ? avatar(bot, 18) : h("span", { class: "file-icon" }, icon(s.apps.includes(n.path) ? "app" : "folder", 15)),
     h("span", { class: "label" }, n.name),
+    bot && s.apps.includes(n.path) ? h("span", { class: "tree-tag", title: "An app: opening the folder opens it" }, icon("app", 11)) : null,
     isReadonly(n.path) ? h("span", { class: "tree-tag", title: "Generated: edit the source note" }, icon("lock", 11)) : null,
     statusDot(bot));
   attachLongPress(row, (pt) => folderMenu(n, botId, pt));

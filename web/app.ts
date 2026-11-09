@@ -7,6 +7,7 @@ import {
   applyRoute, applyTheme, botById, fail, go, loadBotsSoon, loadConversation, loadNotes, loadState, loadThreads, loadToday, loadTree,
   persist, refreshPage, routeFromHash, selectBot, setToast, store,
 } from "./state.ts";
+import { appFilesChanged } from "./ui/apppage.ts";
 import { mountBot, toggleBotPane } from "./ui/bot.ts";
 import { showToast } from "./ui/common.ts";
 import { handlePageKeys } from "./ui/notes.ts";
@@ -112,6 +113,7 @@ function onLive(type: string, data: any): void {
         clearTimeout(pageTimer);
         pageTimer = window.setTimeout(() => void refreshPage(), 120);
       }
+      if (s.page?.kind === "app") appFilesChanged(paths);
       clearTimeout(treeTimer);
       treeTimer = window.setTimeout(() => void loadTree().catch(() => {}), 200);
       break;

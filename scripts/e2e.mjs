@@ -123,6 +123,7 @@ async function drawEllipse(page, r) {
 }
 
 const errors = [];
+let probing = false;
 function watch(page, label) {
   page.on("pageerror", (e) => errors.push(`${label} pageerror: ${e.message}`));
   page.on("console", (m) => {
@@ -133,6 +134,8 @@ function watch(page, label) {
     // Playwright's WebKit screenshots inject a <style>; the app's strict CSP refuses it.
     // Verified separately: the app logs nothing until a screenshot is taken.
     if (label === "phone" && /Refused to apply a stylesheet/.test(text)) return;
+    // The app step probes the sandbox on purpose: what it refuses is the point.
+    if (probing) return;
     errors.push(`${label} console: ${text}`);
   });
 }
@@ -354,6 +357,46 @@ try {
     await page.screenshot({ path: join(SHOTS, "desktop-today-night.png") });
   });
 
+  await stage("an app: the projects board reads the vault in a sandbox and cannot act as you", async () => {
+    await page.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Dashboards/Projects board/index.html")}`);
+    await page.waitForSelector(".app-view .app-frame");
+    const board = page.frameLocator(".app-frame");
+    await board.locator(".card").first().waitFor({ timeout: 10000 });
+    const cards = await board.locator(".card").count();
+    ok(cards === 4, `a card per project (${cards})`);
+    ok(await board.locator(".card li", { hasText: "Order soil" }).count() === 1, "the Org project's NEXT task is on the board");
+    ok(await page.locator(".app-chip.offline").count() === 1, "offline until the owner allows more");
+    ok(await page.locator(".tool-pill:not(.hidden)").count() === 0, "no pen tools on an app");
+    const frame = page.frames().find((f) => f.url().includes("/apps/"));
+    ok(frame, "the app frame");
+    probing = true;
+    const probe = await frame.evaluate(async () => {
+      const out = {};
+      try { out.cookie = document.cookie; } catch { out.cookie = "blocked"; }
+      try { out.storage = localStorage.length; } catch { out.storage = "blocked"; }
+      try { out.parent = parent.document.title; } catch { out.parent = "blocked"; }
+      try { out.api = (await fetch("/api/state")).status; } catch { out.api = "blocked"; }
+      try { out.internet = (await fetch("https://example.com/")).status; } catch { out.internet = "blocked"; }
+      out.theme = document.documentElement.dataset.theme;
+      return out;
+    });
+    await page.waitForTimeout(200);
+    probing = false;
+    ok(probe.cookie === "blocked" && probe.storage === "blocked" && probe.parent === "blocked", `an opaque origin (${JSON.stringify(probe)})`);
+    ok(probe.api === "blocked" && probe.internet === "blocked", `no API and no internet (${JSON.stringify(probe)})`);
+    ok(probe.theme === "night", `the app follows Peers' theme (${probe.theme})`);
+    await page.screenshot({ path: join(SHOTS, "desktop-app-night.png") });
+    // Asking the agent goes through you.
+    await board.locator(".card .ask").first().click();
+    await page.waitForSelector(".modal >> text=Send this to");
+    await page.locator(".modal .actions button.primary").click();
+    await page.waitForSelector(".bot-pane >> text=What should happen next", { timeout: 10000 });
+    // A card opens its project in Peers.
+    await board.locator(".card h2 a").first().click();
+    await page.waitForFunction(() => decodeURI(location.hash).includes("/p/Projects/"));
+    await page.waitForSelector(".page-body .md-block, .page-body .org-drawer, .page-body h2");
+  });
+
   await stage("API refuses requests without a session or the CSRF header", async () => {
     const r1 = await fetch(`http://127.0.0.1:${port}/api/state`);
     ok(r1.status === 401, `no cookie gives 401 (${r1.status})`);
@@ -420,6 +463,11 @@ try {
     await mobile.locator(".bot-settings-head button", { hasText: "Chat" }).click();
     await mobile.waitForSelector(".bot-pane .thread");
     await shot("phone-bot.png");
+  });
+  await stage("phone: an app fills the page", async () => {
+    await mobile.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Dashboards/Projects board/index.html")}`);
+    await mobile.frameLocator(".app-frame").locator(".card").first().waitFor({ timeout: 10000 });
+    await shot("phone-app.png");
   });
   await webkit.close();
 

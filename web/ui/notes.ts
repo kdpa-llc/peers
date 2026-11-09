@@ -760,7 +760,8 @@ const TOOLS: { tool: Tool; icon: string; label: string; key: string }[] = [
 function renderPill(): void {
   if (!pillEl) return;
   const s = store.get();
-  const show = s.route.view === "page" && !!s.page;
+  // Apps are not marked up: the pen and the arrow are for pages.
+  const show = s.route.view === "page" && !!s.page && s.page.kind !== "app";
   pillEl.classList.toggle("hidden", !show);
   if (!show) return;
   const drafts = s.notes.filter((n) => n.status === "draft" || n.status === "unresolved").length;

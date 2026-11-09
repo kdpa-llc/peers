@@ -170,6 +170,12 @@ CREATE TABLE IF NOT EXISTS vault_pairing (
   used_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS vault_app_grants (
+  root TEXT PRIMARY KEY,
+  grant_json TEXT NOT NULL,
+  granted_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS vault_triggers (
   bot_id TEXT NOT NULL,
   trigger_id TEXT NOT NULL,

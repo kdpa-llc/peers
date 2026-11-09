@@ -33,6 +33,7 @@ src/vault/
   triggers.ts            schedules and file-change triggers
   schedules.ts           slot arithmetic in a time zone
   layout.ts              layouts, presets, path patterns, front pages
+  apps.ts                app pages: manifests, read scope, capability tokens, grants, the frame's CSP, data API
   bots.ts                agents: homes, definitions, ownership, write scope
   vault.ts paths.ts      tree, PARA roots, ownership, path policy
   markdown.ts            shared parser (server tests and browser)
@@ -332,6 +333,8 @@ All `/api` routes need a session (§13). Writes need `X-Peers: 1` and a matching
 | `POST /api/pair` (no session) | Exchange a pairing code for a device session |
 | `POST /api/pairing-codes`, `GET /api/devices`, `DELETE /api/devices/:id` | Devices |
 | `GET /api/events` | Server-sent events |
+| `POST /api/apps/open { path }` | Open an app for this device: `{ url: /apps/<token>/…, app, owner }` (§12a) |
+| `POST /api/apps/grant { root, network }`, `/api/apps/revoke { root }` | Allow an app the sites its manifest asks for; take it back |
 
 **Events**: `id: <epoch>:<seq>`. Types: `file.changed`, `tree.changed`, `thread.updated`,
 `bots.changed`, `annotation.updated`, `seen.changed`, `today.changed`, `state.changed`. The
@@ -353,6 +356,32 @@ conversation every 1.5 s while its bot is working, so replies appear as T3 write
 - **PDF**: `pdfjs-dist`, served from `/vendor/pdfjs/`, loaded only when a PDF opens.
 - **PWA**: manifest, icons, service worker caching the shell (network-only for `/api`).
 
+## 12a. Apps (`apps.ts`, ADR 0006)
+
+- **What opens as an app**: any `.html` page; a folder with `peers.app.json` (`docs/specs/app.schema.json`)
+  opens its `entry`, and any page inside it opens as that app. The tree marks app folders.
+- **The frame**: `<iframe sandbox="allow-scripts allow-forms allow-modals allow-downloads">`, loaded
+  by URL, never `srcdoc`. Without `allow-same-origin` its origin is opaque: no cookies, no storage,
+  no access to the Peers page, and its requests to Peers are cross-site, so the `SameSite=Strict`
+  session never goes with them.
+- **Capability path**: `POST /api/apps/open` mints a random token for one app and one device
+  (12 hours; revoked with the device; gone on restart). Everything the frame loads is under
+  `/apps/<token>/`: the app's own files, and `_peers/` at any depth for `peers.js` and the data
+  API (`app`, `file`, `list`, `page`, `tasks`, `events`). Each path goes through the path policy
+  (#1) and the app's scope: its folder plus `reads` (#7). GET and HEAD only.
+- **CSP on every `/apps/` response**: `sandbox …` (no `allow-same-origin`, no popups or top
+  navigation), sources limited to `<origin>/apps/<token>/` plus granted origins, inline script and
+  `eval` allowed inside, `form-action 'none'`, `frame-ancestors <origin>`. The origin is the one the
+  browser used (Host and trusted forwarded headers), because WebKit does not match `'self'` from
+  a sandboxed document (#6).
+- **Grants**: `vault_app_grants` in the state database; only origins the manifest lists can be
+  granted, and the frame gets the intersection of the two (#8).
+- **Bridge**: the app `postMessage`s `open` (go to a vault page) or `ask` (a message to the app
+  folder's agent, after the owner confirms). Peers accepts messages only from its own frame's
+  window with origin `null`. Peers sends the theme (`#theme=`, then `theme` messages).
+- **Reloads**: a change to the entry page re-renders it; a change elsewhere in the app folder,
+  except `data/`, reloads the frame; resizes and live updates keep it.
+
 ## 13. Security
 
 - **Bind** `127.0.0.1` only. Phone: `tailscale serve --bg 4777` and
@@ -363,6 +392,8 @@ conversation every 1.5 s while its bot is working, so replies appear as T3 write
 - **Request checks**: Host must be the bound address or the configured origin (DNS
   rebinding). Writes need `X-Peers: 1` and a matching Origin. `X-Forwarded-*` only from loopback.
 - **CSP**: `default-src 'self'`, no inline script or style, `frame-ancestors 'none'`.
+- **Apps**: an opaque-origin frame on a capability path with its own CSP (§12a). `/api` also
+  refuses `Origin: null` and any `Sec-Fetch-Site` other than `same-origin` or `none`.
 - **Raw files**: extension allowlist confirmed by magic bytes; others download; always
   `nosniff` and `sandbox`.
 - **The embedded T3** listens on loopback with its own data and a bearer token Peers mints and

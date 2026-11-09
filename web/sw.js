@@ -15,7 +15,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api/") || url.searchParams.has("pair")) return;
+  // App frames (/apps/) and data are never cached or served from here.
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/apps/") || url.searchParams.has("pair")) return;
   // Network first, so a running server always serves the current client; the cache only
   // covers the moment the computer running Peers is unreachable.
   event.respondWith(

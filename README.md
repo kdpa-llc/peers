@@ -75,6 +75,7 @@ Agents are Claude Code or Codex sessions on [T3 Code][t3], signed in with their 
 - 📣 **@mentions** — `@Finances can we afford it?` from any chat reaches the Finances agent too, in a conversation that links back
 - 👀 **Changed since you last looked** — changed blocks marked on the page, a dot in the tree, and a list on Today
 - 📝 **Markdown and Org** — wikilinks, embeds, callouts, front matter; Org task states, priorities, tags, drawers and planning lines; images and PDFs
+- 🧩 **Apps in the vault** — ask an agent for a dashboard or a small tool and it builds a web app in a folder; it runs in a sandbox that reads only what it lists and stays offline until you allow a site
 - ⏰ **Schedules and file triggers** — with guards that stop agents from waking each other in a loop
 - 🔐 **Separate sign-ins** — the agents' Claude Code and Codex accounts live in the container, apart from your own
 - 📱 **Phone and desktop** — an installable web app; HTTPS from the phone through Tailscale Serve, with device pairing
@@ -149,6 +150,7 @@ From a clone of this repository, run them as `npm run peers -- <command>`.
 - **Send notes** — press `P` for the pen or `A` for an arrow, mark the page, type what you want, press Enter.
 - **Mention** — type `@` in any chat to pick another agent.
 - **Today** — replies you have not read, failed runs, pages changed since you looked, and what is coming up.
+- **Apps** — ask an agent for a dashboard ("a board of my projects with what is due next"), then open its folder. The bar above it says what it reads and whether it is online; **Allow** gives it the sites it asks for.
 
 **From your phone**
 
@@ -178,6 +180,24 @@ Which folders and pages have agents lives in the vault, in `.peers/layout.json`.
 ```
 
 `*` matches within one folder and `**` any depth; patterns ending in `.md` or `.org` mean single pages. A folder's front page (`index`, `README`, `main`, `Overview`, or `<folder>/<folder>.md`) opens with the folder and names its agent. Schema: [`docs/specs/layout.schema.json`](docs/specs/layout.schema.json).
+
+### Apps
+
+Any `.html` file in the vault opens as an app page. A folder with a `peers.app.json` is an app; opening the folder opens it:
+
+```json
+{
+  "name": "Projects board",
+  "reads": ["Projects/**"],
+  "network": ["https://cdn.jsdelivr.net"]
+}
+```
+
+- `reads`: vault paths it may read besides its own folder, as layout patterns
+- `network`: sites it may load from or talk to, once you allow them; without it the app is offline
+- `entry`: the page that opens (default `index.html`)
+
+In the app, `<script src="_peers/peers.js"></script>` gives `peers.text(path)`, `peers.json(path)`, `peers.list(folder)`, `peers.page(path)` (a parsed Markdown or Org page), `peers.tasks(path)` (tasks with their deadlines), `peers.onChange(fn)`, `peers.open(path)` and `peers.ask(text)`, which proposes a message to the folder's agent for you to confirm. The demo vault has one in `Dashboards/Projects board`. Schema: [`docs/specs/app.schema.json`](docs/specs/app.schema.json).
 
 ### Command-Line Options
 
@@ -229,7 +249,8 @@ Design: [`docs/design/`](docs/design/README.md). Decisions: [`docs/adr/`](docs/a
 - The server binds to loopback; the container publishes its port on the host's loopback only
 - Devices pair with single-use codes; sessions are hashed, `HttpOnly`, `SameSite=Strict` cookies you can revoke
 - Every write needs an `X-Peers` header and a matching `Origin`; the `Host` header is checked (DNS rebinding)
-- Vault content is never rendered as HTML, and raw files are served sandboxed
+- Pages are never rendered as HTML, and raw files are served sandboxed
+- Apps run in a sandboxed frame with an opaque origin: no cookies, no Peers API, only the paths they list, and no internet until you allow named sites
 - Agents can do what Claude Code and Codex can do inside the container, and nothing outside it
 - There is no Undo: keep the vault in Git, Time Machine or a sync tool with versions
 

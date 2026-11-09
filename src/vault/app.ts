@@ -12,6 +12,7 @@ import { BotRegistry, type Bot, type BotDef } from "./bots.ts";
 import { Conversations, type ThreadView } from "./conversations.ts";
 import { DemoEngine, T3Engine, type BotEngine, type EngineThread } from "./engine.ts";
 import { FileTracker, type Attribution, type FileChange } from "./files.ts";
+import { AppError, appEntry, AppGrants, AppSessions, effectiveNetwork, findApp } from "./apps.ts";
 import { frontPage, layoutFile, PAGE_EXT, PARA_FOLDERS, paraLayout, readLayout, suggestLayout, validateLayout, within, type Layout } from "./layout.ts";
 import { checkRead, PolicyError } from "./paths.ts";
 import { ensureVaultId, loadSettings, openDb, saveSettings, stateDirFor, writeJsonAtomic, type VaultSettings } from "./state.ts";
@@ -88,6 +89,9 @@ export class VaultApp {
   readonly triggers: Triggers;
   readonly signins: SignIns;
   readonly bus = new Bus();
+  /** Capability tokens for app frames, and what the owner allowed each app (ADR 0006). */
+  readonly appSessions = new AppSessions();
+  readonly appGrants: AppGrants;
   private settingsValue: VaultSettings;
   private layoutValue: Layout;
   /** Why `.peers/layout.json` was not used, when it could not be read. */
@@ -115,6 +119,7 @@ export class VaultApp {
       default_model: { provider: "claude", model: "claude-sonnet-5-5", thinking: "medium" },
     });
     this.db = openDb(join(this.stateDir, "vault.db"));
+    this.appGrants = new AppGrants(this.db);
     this.vault = new Vault(this.root);
     this.layoutValue = this.loadLayout();
     const now = (): Date => this.clock.now();
@@ -468,11 +473,15 @@ export class VaultApp {
     const owners: Record<string, string> = {};
     for (const b of this.registry.list()) if (b.path) owners[b.path] = b.def.id;
     const fronts: Record<string, string> = {};
+    const apps: string[] = [];
     const readonly: string[] = [];
     const walk = (n: TreeNode): void => {
       for (const c of n.children ?? []) {
         if (c.type === "dir") {
-          const fp = frontPage(this.root, c.path);
+          // An app folder opens its app (ADR 0006); any other folder its front page.
+          const app = appEntry(this.root, c.path);
+          if (app) apps.push(c.path);
+          const fp = app ?? frontPage(this.root, c.path);
           if (fp) fronts[c.path] = fp;
           walk(c);
         }
@@ -481,7 +490,7 @@ export class VaultApp {
     };
     walk(tree);
     const rootFront = frontPage(this.root, "");
-    return { tree, owners, fronts, readonly, ...(rootFront ? { root_front: rootFront } : {}), inbox: layout.inbox ?? null, archive: layout.archive ?? null };
+    return { tree, owners, fronts, apps, readonly, ...(rootFront ? { root_front: rootFront } : {}), inbox: layout.inbox ?? null, archive: layout.archive ?? null };
   }
 
   readFile(rel: string): Record<string, unknown> {
@@ -511,6 +520,54 @@ export class VaultApp {
       out.change = { created: !this.files.seenHash(path), hunks: [], author, author_name: this.authorName(author), at: row.updated_at, outside_scope: !!row.outside_scope };
     }
     return out;
+  }
+
+  // ------------------------------------------------------------------ apps (ADR 0006)
+
+  /** Open an app for a device: a capability path for its frame, and what it asks for beyond its grant. */
+  openApp(path: string, device: string): Record<string, unknown> {
+    let app;
+    try {
+      app = findApp(this.root, path);
+    } catch (err) {
+      if (err instanceof AppError) throw new BadRequest(err.message);
+      throw err;
+    }
+    if (!app) throw new NotFound(`${path} is not an app`);
+    const { allowed, asks } = effectiveNetwork(app, this.appGrants.get(app.root));
+    const session = this.appSessions.open(app, device, allowed, this.clock.now());
+    return {
+      url: `/apps/${session.token}/${app.entry.split("/").map(encodeURIComponent).join("/")}`,
+      app: {
+        name: app.name, root: app.root, entry: app.entry, manifest: app.manifest, reads: app.reads, network: allowed, asks,
+        ...(app.description ? { description: app.description } : {}),
+      },
+      owner: this.registry.ownerOf(app.root || checkRead(this.root, path)).def.id,
+    };
+  }
+
+  /** The owner allows an app the origins it asks for (only those). */
+  grantApp(root: string, network: string[]): Record<string, unknown> {
+    let app;
+    try {
+      app = findApp(this.root, root);
+    } catch (err) {
+      if (err instanceof AppError) throw new BadRequest(err.message);
+      throw err;
+    }
+    if (!app?.manifest || app.root !== checkRead(this.root, root)) throw new BadRequest(`${root} is not an app folder`);
+    const extra = network.filter((o) => !app.network.includes(o));
+    if (extra.length) throw new BadRequest(`the app does not ask for ${extra.join(", ")}`);
+    this.appGrants.set(app.root, { network: [...new Set(network)] }, this.clock.now());
+    this.bus.publish("apps.changed", { root: app.root });
+    return { ok: true, network };
+  }
+
+  /** Take back what an app was allowed. */
+  revokeApp(root: string): Record<string, unknown> {
+    const removed = this.appGrants.remove(checkRead(this.root, root));
+    this.bus.publish("apps.changed", { root });
+    return { ok: removed };
   }
 
   /** The owner has seen this file as it is (when `hash` still matches). */

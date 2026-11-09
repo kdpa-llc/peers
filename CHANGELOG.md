@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Apps in the vault** (ADR 0006). Any `.html` page, or a folder with a `peers.app.json`,
+  opens as a web app in a sandboxed frame with an opaque origin: no cookies, no Peers API, and
+  only the vault paths it lists. Its `_peers/peers.js` helper reads files, folder listings,
+  parsed Markdown and Org pages, and tasks with deadlines, and follows changes. Sites it asks
+  for stay blocked until the owner allows them. Agents are told how to build one, and the demo
+  vault has a projects board.
+- `/api` refuses requests from opaque origins and other sites outright.
+
 ## [0.1.0] - 2026-11-07
 
 First version of Peers as a notes vault with agents, published to npm as `peers-vault`.
