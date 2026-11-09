@@ -5,7 +5,27 @@ import { api } from "../lib/api.ts";
 import { allFiles, botById, fail, go, selectBot, setTheme, store, toast } from "../state.ts";
 import { avatar } from "./common.ts";
 
-type Item = { group: string; label: string; sub?: string; icon?: Node; run: () => void };
+type Item = { group: string; label: string | Node; sub?: string; icon?: Node; run: () => void };
+
+const PAGE_EXT = /\.(md|markdown|org|html?)$/i;
+
+/** A line of a page as words: list markers, heading marks, checkboxes and link brackets removed. */
+function cleanLine(line: string): string {
+  return line
+    .replace(/^\s*(?:[-+*]|\d+[.)])\s+(?:\[[ xX-]\]\s+)?/, "")
+    .replace(/^\s*(?:#{1,6}|\*+)\s+(?:(?:TODO|NEXT|WAITING|HOLD|DONE|CANCELLED|CANCELED)\s+)?/, "")
+    .replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g, "$1")
+    .replace(/\[\[[^\]]*\]\[([^\]]+)\]\]/g, "$1")
+    .replace(/\s*:[\w@#%:]+:\s*$/, "")
+    .trim();
+}
+
+/** The text with the query in bold, once, where it first appears. */
+function withMatch(text: string, query: string): Node {
+  const i = text.toLowerCase().indexOf(query.toLowerCase());
+  if (i < 0 || !query) return document.createTextNode(text);
+  return h("span", null, text.slice(0, i), h("strong", null, text.slice(i, i + query.length)), text.slice(i + query.length));
+}
 
 let open = false;
 
@@ -23,7 +43,7 @@ export function openPalette(initial = ""): void {
   const close = (): void => { open = false; scrim.remove(); box.remove(); };
   scrim.addEventListener("click", close);
 
-  const commands = (): Item[] => [
+  const commands = (): (Item & { label: string })[] => [
     { group: "Commands", label: "Today", icon: icon("today", 16), run: () => go({ view: "today" }) },
     // One "New folder in …" per section the tree shows (Projects, Areas, or whatever the vault has).
     ...[...document.querySelectorAll<HTMLButtonElement>('.section-head button[aria-label^="New folder"]')].map((b) => ({
@@ -47,14 +67,16 @@ export function openPalette(initial = ""): void {
 
   const build = (): void => {
     const query = input.value.trim();
+    // Pages, PDFs, images and apps; an app's own code and manifest are not pages.
     const pages = allFiles()
+      .filter((f) => f.kind !== "other" && f.name !== "peers.app.json")
       .map((f) => ({ f, sc: score(f.path, query) }))
       .filter((x) => x.sc > 0)
       .sort((a, b) => b.sc - a.sc)
       .slice(0, query ? 8 : 6)
       .map(({ f }) => ({
-        group: "Pages", label: f.name.replace(/\.(md|markdown)$/i, ""), sub: f.path,
-        icon: icon(f.kind === "pdf" ? "pdf" : f.kind === "image" ? "image" : "file", 16),
+        group: "Pages", label: f.name.replace(PAGE_EXT, ""), sub: f.path.split("/").slice(0, -1).join("/") || "Vault",
+        icon: icon(f.kind === "pdf" ? "pdf" : f.kind === "image" || f.kind === "svg" ? "image" : f.kind === "app" ? "app" : "file", 16),
         run: () => go({ view: "page", path: f.path }),
       }));
     const bots = store.get().bots
@@ -85,7 +107,7 @@ export function openPalette(initial = ""): void {
       const r = await api.get<{ results: any[] }>(`/api/search?q=${encodeURIComponent(query)}`);
       if (input.value.trim() !== query) return;
       textResults = r.results.filter((x) => x.match === "text").slice(0, 8).map((x) => ({
-        group: "In pages", label: x.excerpt ?? x.path, sub: `${x.path}:${x.line}`, icon: icon("search", 16),
+        group: "In pages", label: withMatch(cleanLine(x.excerpt ?? "") || x.path, query), sub: x.path.replace(PAGE_EXT, ""), icon: icon("search", 16),
         run: () => go({ view: "page", path: x.path }),
       }));
       const keep = active;

@@ -22,16 +22,18 @@ export function renderBotSettings(id: string): Node {
       avatar(bot, 44),
       h("div", { style: { flex: "1", minWidth: "0" } },
         h("h1", null, bot.name),
-        h("div", { class: "muted" }, `${statusText(bot, s.activity[bot.id])} · ${bot.conversations} conversation${bot.conversations === 1 ? "" : "s"}`)),
+        h("div", { class: "muted" }, `${statusText(bot, s.activity[bot.id])} · `,
+          h("span", { class: "nowrap" }, `${bot.conversations} conversation${bot.conversations === 1 ? "" : "s"}`))),
       h("button", {
         class: "btn", onclick: () => {
           selectBot(bot.id, { pin: true });
           store.set({ tab: "bot", botCollapsed: false });
         },
       }, icon("comment", 14), "Chat")),
-    h("nav", { class: "chips", "aria-label": "Sections" },
-      [["setup", "Instructions and model"], ["memory", "Memory"], ["triggers", "Triggers"]].map(([a, label]) => h("button", {
-        class: "chip", onclick: () => document.getElementById(`bot-${a}`)?.scrollIntoView({ behavior: "smooth" }),
+    // Jump links to the sections below (they scroll; they do not switch anything).
+    h("nav", { class: "section-links", "aria-label": "Sections" },
+      [["setup", "Instructions and model"], ["memory", "Memory"], ["triggers", "Triggers"]].map(([a, label]) => h("a", {
+        href: `#bot-${a}`, onclick: (e: Event) => { e.preventDefault(); document.getElementById(`bot-${a}`)?.scrollIntoView({ behavior: "smooth" }); },
       }, label))),
     section("setup", "Instructions and model", "How this agent works, which model it thinks with, and where it may write.", setupView(bot)),
     section("memory", "Memory", "What this agent carries from one conversation to the next: a page in its folder that it reads and adds to.", memoryView(bot)),

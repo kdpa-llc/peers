@@ -199,7 +199,9 @@ try {
     await page.waitForSelector(".pin.applied, .pin.done", { timeout: 10000 });
     await page.waitForSelector(".msg .bot-text >> text=Done (demo mode)", { timeout: 10000 });
     const chip = await page.locator(".change-chip").textContent();
-    ok(/since you last looked · by Website Relaunch/.test(chip), `the chip says who changed it (${chip})`);
+    ok(/since you last looked/.test(chip), `the chip says it changed (${chip})`);
+    const byline = await page.locator(".page-meta").textContent();
+    ok(/Website Relaunch/.test(byline), `the line above says who changed it (${byline})`);
     ok(!(await page.locator(".change-chip button", { hasText: "Undo" }).count()), "no Undo");
     await settled(page);
 
@@ -266,7 +268,7 @@ try {
     await settled(page);
 
     await page.screenshot({ path: join(SHOTS, "desktop-conversations-day.png") });
-    await page.locator(".conv-row.new").click();
+    await page.locator(".conv-bar .btn", { hasText: "New" }).click();
     await page.waitForSelector(".composer textarea");
     await page.fill(".composer textarea", "@Finances can we afford a launch party?");
     await page.keyboard.press("Enter");
@@ -464,6 +466,24 @@ try {
     await page.locator(".app-chip.server").click();
     await page.waitForSelector(".modal .app-log >> text=expense log on port");
     await page.locator(".modal .actions button", { hasText: "Close" }).click();
+  });
+
+  await stage("tablet: the page sits next to the chat, and the tree opens over it", async () => {
+    const tab = await desktop.newPage();
+    watch(tab, "tablet");
+    await tab.setViewportSize({ width: 1024, height: 768 });
+    await tab.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Projects/Website Relaunch/Launch plan.md")}`);
+    await tab.waitForSelector(".page-body .md-block");
+    const width = await tab.evaluate(() => document.querySelector(".page-pane").getBoundingClientRect().width);
+    ok(width > 500, `the page has room next to the chat (${Math.round(width)} px)`);
+    await tab.locator(".tree-toggle-inline").click();
+    await tab.waitForSelector(".app.tree-open .tree-pane .tree-row");
+    await tab.locator(".tree-pane .tree-row", { hasText: "Decisions" }).click();
+    await tab.waitForFunction(() => decodeURI(location.hash).endsWith("Decisions.md"));
+    await tab.waitForSelector(".app.tree-open", { state: "detached", timeout: 3000 }).catch(() => ok(false, "opening a page closes the tree"));
+    await settled(tab);
+    await tab.screenshot({ path: join(SHOTS, "tablet-page.png") });
+    await tab.close();
   });
 
   await stage("API refuses requests without a session or the CSRF header", async () => {

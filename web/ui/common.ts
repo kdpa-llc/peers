@@ -161,7 +161,8 @@ export function showToast(text: string, opts: { error?: boolean; action?: { labe
     opts.action ? h("button", { onclick: () => { dismissToast(el); opts.action!.run(); } }, opts.action.label) : null);
   toastHost.appendChild(el);
   const live = [...toastHost.querySelectorAll<HTMLElement>(".toast:not(.out)")];
-  while (live.length > 3) dismissToast(live.shift()!);
+  // One at a time: the previous one leaves above the new one, which does not move.
+  while (live.length > 1) dismissToast(live.shift()!);
   setTimeout(() => dismissToast(el), opts.action ? 7000 : opts.error ? 6000 : 3500);
 }
 

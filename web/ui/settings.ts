@@ -44,7 +44,8 @@ export function renderSettings(): Node {
   provider.addEventListener("change", () => { fill(); void saveModel(); });
   for (const el of [model, thinking]) el.addEventListener("change", () => void saveModel());
   const engineLine = s.engine?.kind === "demo"
-    ? h("p", { class: "muted" }, "Demo mode: agents are scripted and nothing leaves this computer. Start Peers without --scripted to run them on T3.")
+    ? h("p", { class: "muted" }, "Demo mode: agents are scripted and nothing leaves this computer. Start Peers without ",
+      h("code", { class: "nowrap" }, "--scripted"), " to run them on T3.")
     : signInView();
 
   const owner = h("input", { value: s.vault?.owner ?? "", "aria-label": "Your name" }) as HTMLInputElement;

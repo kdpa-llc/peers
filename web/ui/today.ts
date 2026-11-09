@@ -111,18 +111,18 @@ export function renderToday(): Node {
   ].filter(Boolean);
   const summary = parts.length
     ? `${parts.join(" · ")}.`.replace(/^./, (c) => c.toUpperCase())
-    : `All quiet. ${active.length} ${active.length === 1 ? "agent is" : "agents are"} looking after ${s.vault?.name ?? "your vault"}.`;
+    : `All quiet. ${active.length} ${active.length === 1 ? "agent is" : "agents are"} looking after your vault.`;
 
   const count = (k: number): Node | null => (k ? h("span", { class: "count" }, String(k)) : null);
   return h("div", { class: "today" },
     ...head(summary),
-    h("section", null, h("h2", null, "Needs you", count(needs.length)),
-      needs.length ? h("div", { class: "list" }, needs)
-        : h("div", { class: "all-clear" }, h("span", { class: "ok" }, icon("check", 15)), h("span", null, "Nothing needs you right now."))),
-    h("section", null, h("h2", null, "Changed since you looked", count(changes.length),
-      changes.length ? h("button", { class: "btn small", onclick: () => void act("/api/seen/all", "Marked everything as seen") }, icon("check", 13), "Mark all seen") : null),
-      changes.length ? h("div", { class: "list" }, changes)
-        : h("div", { class: "all-clear" }, h("span", { class: "ok" }, icon("eye", 15)), h("span", null, "Nothing new since you last looked."))),
+    // Empty sections stay out of the way: the line above already says when all is quiet.
+    needs.length ? h("section", null, h("h2", null, "Needs you", count(needs.length)), h("div", { class: "list" }, needs)) : null,
+    changes.length ? h("section", null, h("h2", null, "Changed since you looked", count(changes.length),
+      h("button", { class: "btn small", onclick: () => void act("/api/seen/all", "Marked everything as seen") }, icon("check", 13), "Mark all seen")),
+    h("div", { class: "list" }, changes)) : null,
+    !needs.length && !changes.length ? h("div", { class: "all-clear" }, h("span", { class: "ok" }, icon("check", 15)),
+      h("span", null, "Nothing needs you, and nothing changed since you last looked.")) : null,
     coming.length ? h("section", null, h("h2", null, "Coming up", count(coming.length)), h("div", { class: "list" }, coming)) : null,
     h("section", null, h("h2", null, "Agents", count(active.length)),
       h("div", { class: "bot-grid" }, active.map(tile)),

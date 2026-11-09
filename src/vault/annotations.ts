@@ -321,7 +321,11 @@ export class Notes {
     let threadId: string | undefined;
     if (sent.length > 0) {
       const text = this.message(path, kind, sent);
-      threadId = await deliver(bot, text, `Notes on ${path.split("/").pop()!.replace(/\.(md|markdown)$/i, "")}`);
+      // Named by the page and its first instruction, so several sends on one page tell apart.
+      const page = path.split("/").pop()!.replace(/\.(md|markdown|org)$/i, "");
+      const first = sent.map((n) => n.instruction?.trim() ?? "").find(Boolean);
+      const title = first ? `${page}: ${first.length > 48 ? `${first.slice(0, 47)}…` : first}` : `Notes on ${page}`;
+      threadId = await deliver(bot, text, title);
       if (currentBlob && source) {
         const snap = join(this.snapshots, currentBlob);
         if (!existsSync(snap)) writeFileSync(snap, source, { mode: 0o600 });

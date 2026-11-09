@@ -15,7 +15,7 @@ import { attachInk, markingBusy, mountPeek, mountToolPill } from "./notes.ts";
 import { renderSettings } from "./settings.ts";
 import { renderBotSettings } from "./botsettings.ts";
 import { renderToday } from "./today.ts";
-import { renderApp } from "./apppage.ts";
+import { appHeaderSlot, renderApp } from "./apppage.ts";
 import { toggleTreePane } from "./tree.ts";
 
 let lastRendered = "";
@@ -49,6 +49,7 @@ export function mountPage(pane: HTMLElement): void {
     const keepScroll = key === lastRendered ? scroll.scrollTop : 0;
     lastRendered = key;
     appShown = "";
+    head.classList.toggle("is-today", s.route.view === "today");
     replace(head, header());
     if (s.route.view === "today") replace(scroll, renderToday());
     else if (s.route.view === "settings") replace(scroll, renderSettings());
@@ -125,7 +126,8 @@ function header(): Node {
         ], { x: e.clientX - 180, y: e.clientY + 12 }),
       }, icon("more", 17)));
   }
-  return h("div", { style: { display: "contents" } }, tabletTree, crumbs, actions);
+  const app = s.route.view === "page" && s.page?.kind === "app" && s.page.path === s.route.path ? appHeaderSlot : null;
+  return h("div", { style: { display: "contents" } }, tabletTree, crumbs, app, actions);
 }
 
 function revealFolder(folder: string): void {
@@ -137,7 +139,8 @@ function revealFolder(folder: string): void {
 
 function renderPage(page: PageData): Node {
   const s = store.get();
-  const frame = h("div", { class: "page-frame" });
+  // PDFs and images are white paper in both themes: marks on them keep the day ink.
+  const frame = h("div", { class: ["page-frame", (page.kind === "pdf" || page.kind === "image" || page.kind === "svg") && "on-paper"] });
   const author = botById(page.author);
   let title = page.path.split("/").pop()!.replace(/\.(md|markdown|org)$/i, "");
   const meta = h("div", { class: "page-meta" },
@@ -158,6 +161,9 @@ function renderPage(page: PageData): Node {
     if (firstH1 !== undefined && firstH1.trim().toLowerCase() === title.trim().toLowerCase()) {
       blocks = blocks.filter((_, i) => i !== firstContent);
     }
+    // An Org file's top headings are its sections (its title is #+TITLE): one size down, like
+    // Markdown's ##, so a list of tasks does not read as a stack of page titles.
+    if (isOrgPath(page.path)) blocks = blocks.map((b) => (b.t === "heading" ? { ...b, level: Math.min(6, b.level + 1) } : b));
     body.append(renderBlocks(blocks, {
       resolveWiki: (t) => resolveWiki(t, page.path),
       resolveVault: (href) => resolveRelative(href, page.path),
@@ -192,7 +198,8 @@ function renderPage(page: PageData): Node {
     const by = c.author === "external" ? "outside Peers" : c.author === "human" ? "you" : c.author_name;
     const chip = h("div", { class: "change-chip", role: "status" },
       icon("sparkle", 14),
-      h("span", null, `${c.created ? "New" : "Changed"} since you last looked · by ${by} · ${ago(c.at)}`),
+      // Who and when are in the line above; this says what to look for.
+      h("span", { title: `by ${by} · ${ago(c.at)}` }, `${c.created ? "New" : "Changed"} since you last looked`),
       c.outside_scope ? h("span", { class: "warn-tag", title: "Outside the folders this agent is asked to write in" }, "outside its folder") : null,
       page.kind === "page" && c.hunks.length ? h("button", {
         onclick: () => {

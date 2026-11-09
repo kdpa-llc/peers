@@ -24,18 +24,19 @@ let asking = false;
 /** The app on screen, so changes to its files reload it. */
 let current: { path: string; root: string; reload: () => void } | undefined;
 let reloadTimer: number | undefined;
+/** What the app may read and reach, and its controls: shown in the page header, next to its name. */
+export const appHeaderSlot = h("span", { class: "app-head" });
 
 export function renderApp(page: PageData): Node {
   listen();
-  const name = h("span", { class: "app-name" }, page.path.split("/").pop()!.replace(/\.html?$/i, ""));
   const chips = h("span", { class: "app-chips" });
   const actions = h("span", { class: "app-actions" });
-  const bar = h("div", { class: "app-bar" }, h("span", { class: "app-icon" }, icon("app", 15)), name, chips, actions);
+  replace(appHeaderSlot, chips, actions);
   const ask = h("div", { class: "app-ask hidden", role: "status" });
   const frame = h("iframe", {
     class: "app-frame", title: page.path, sandbox: SANDBOX, referrerpolicy: "no-referrer", allow: "",
   }) as HTMLIFrameElement;
-  const view = h("div", { class: "app-view", dataset: { app: page.path } }, bar, ask, frame);
+  const view = h("div", { class: "app-view", dataset: { app: page.path } }, ask, frame);
 
   const load = async (): Promise<void> => {
     let opened: AppOpen;
@@ -50,12 +51,11 @@ export function renderApp(page: PageData): Node {
     const serverChip = h("button", { class: "app-chip server hidden" }) as HTMLButtonElement;
     const ctx: FrameContext = { path: page.path, root: app.root, owner: opened.owner, name: app.name };
     if (current?.path === page.path) current.root = app.root;
-    replace(name, app.name);
     replace(chips,
       h("span", { class: "app-chip", title: [app.root || "the vault", ...app.reads].join("\n") },
         icon("eye", 12), app.reads.length ? `Reads its folder and ${app.reads.length} more` : "Reads its folder"),
-      h("span", { class: ["app-chip", app.network.length ? "online" : "offline"], title: app.network.join("\n") || "No internet" },
-        icon("link", 12), app.network.length ? `Online: ${app.network.map(host).join(", ")}` : "Offline"),
+      h("span", { class: ["app-chip", app.network.length ? "online" : "offline"], title: app.network.join("\n") || "It cannot reach the internet" },
+        icon(app.network.length ? "link" : "lock", 12), app.network.length ? `Online: ${app.network.map(host).join(", ")}` : "No internet access"),
       serverChip);
     if (app.server?.allowed) {
       showServerState(serverChip, app.server);

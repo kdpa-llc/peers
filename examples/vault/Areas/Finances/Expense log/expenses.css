@@ -7,6 +7,7 @@ form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 input, button { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
 input[name="note"] { flex: 1; min-width: 140px; }
 button { background: var(--accent); border-color: var(--accent); color: #fff; cursor: pointer; }
+:root[data-theme="night"] button { color: #0B1F1F; }
 #status { color: #b42318; min-height: 1em; margin: 4px 0; }
 #totals { color: var(--muted); margin: 6px 0 14px; }
 table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }

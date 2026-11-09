@@ -36,11 +36,20 @@ All notable changes to this project are documented here. The format follows
 - The interface says "agent" everywhere (it said "bot" in places). Muted and amber text now
   meet 4.5:1 contrast. Motion is specified in docs/design/MOTION.md.
 
+- Toasts are calmer in the night theme and show one at a time; your own messages line up
+  with their time; note conversations are named by their first note; pane headers share one
+  height and hairline; Org headings sit one size below the page title; search shows clean
+  matches with the query in bold and leaves out apps' own files; an app's status sits in the
+  page header; pen marks stay dark on PDFs and images at night.
+
 ### Fixed
 
 - A page's title no longer shows twice when the page starts with the same heading.
 - The chat box's hint no longer wraps and gets cut off.
 - The pairing screen fits narrow phones.
+- Between 820 and 1180 px wide, the page column was empty and the tree could not be opened.
+- On a phone, selects no longer overflow their card, and "Hide chat" no longer shows where it
+  does nothing.
 
 ## [0.1.0] - 2026-11-07
 

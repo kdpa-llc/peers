@@ -37,8 +37,7 @@ export function mountBot(pane: HTMLElement): void {
         avatar(bot, 36),
         h("div", { class: "who" },
           h("div", { class: "name" }, h("span", null, bot.name),
-            bot.needs_review ? h("span", { class: "badge" }, "Review") : null,
-            s.pinned ? h("span", { class: "badge pinned" }, "Pinned") : null),
+            bot.needs_review ? h("span", { class: "badge" }, "Review") : null),
           h("div", { class: "status", title: statusText(bot, s.activity[bot.id]) }, statusText(bot, s.activity[bot.id]))),
         running
           ? h("button", { class: "icon-btn", title: "Stop", "aria-label": "Stop", onclick: () => stop(bot) }, icon("pause", 16))
@@ -49,7 +48,7 @@ export function mountBot(pane: HTMLElement): void {
         }, icon("pin", 16)),
         // Memory, triggers and setup are used rarely, so they live on their own page.
         h("button", { class: "icon-btn", title: "Agent settings: instructions, memory, triggers", "aria-label": "Agent settings", onclick: () => go({ view: "bot", id: bot.id }) }, icon("settings", 16)),
-        h("button", { class: "icon-btn", title: "Hide (⌘⇧\\)", "aria-label": "Hide chat", onclick: () => toggleBotPane() }, icon("sidebarRight", 16))));
+        h("button", { class: "icon-btn desktop-only", title: "Hide (⌘⇧\\)", "aria-label": "Hide chat", onclick: () => toggleBotPane() }, icon("sidebarRight", 16))));
   };
 
   const renderBar = (): void => {
@@ -64,7 +63,10 @@ export function mountBot(pane: HTMLElement): void {
         title: "Conversations", onclick: () => store.set({ showThreads: !s.showThreads }),
       },
         icon(current ? originIcon(current) : "comment", 14),
-        h("span", { class: "conv-title" }, s.threadId === "new" || !current ? "New conversation" : current.title),
+        // Not a second "New" button: a quiet label until there is a conversation to show.
+        s.threadId === "new" || !current
+          ? h("span", { class: "conv-title placeholder" }, s.threads.length ? "New conversation" : "No conversations yet")
+          : h("span", { class: "conv-title" }, current.title),
         others ? h("span", { class: "count", title: `${others} other conversation${others === 1 ? "" : "s"} with new replies` }, String(others)) : null,
         h("span", { class: "conv-caret" }, icon("chevronDown", 13))),
       h("button", { class: "btn small", title: "New conversation", "aria-label": "New conversation", onclick: () => { newConversation(); focusComposer(); } },
@@ -147,9 +149,7 @@ function threadList(bot: BotStatus): Node {
       ], { x: e.clientX - 140, y: e.clientY + 8 }),
     }, icon("more", 14))));
   return h("div", { class: "conv-list", role: "list" },
-    h("button", { class: "conv-row new", onclick: () => { newConversation(); focusComposer(); } },
-      icon("plus", 15), h("span", null, `New conversation with ${bot.name}`)),
-    rows.length ? rows : h("p", { class: "muted", style: { padding: "12px 16px" } }, "No conversations yet."));
+    rows.length ? rows : h("p", { class: "muted", style: { padding: "12px 16px" } }, `No conversations with ${bot.name} yet.`));
 }
 
 async function archive(bot: BotStatus, t: ThreadView): Promise<void> {
@@ -340,10 +340,11 @@ function renderMessage(m: Message, bot: BotStatus, prev?: Message): Node {
         h("button", { class: "action-chip", style: { marginTop: "6px" }, onclick: () => go({ view: "page", path }) }, icon("file", 12), "Open page"),
         time);
     }
-    return h("div", { class: ["msg mine", m.pending && "pending"] }, h("div", null,
+    return h("div", { class: ["msg mine", m.pending && "pending"] }, h("div", { class: "mine-col" },
       h("div", { class: "bubble" }, m.text),
-      m.context ? h("div", { class: "ctx", style: { justifyContent: "flex-end" }, title: m.context }, icon("file", 11), contextLabel(m.context)) : null,
-      h("div", { class: "meta", style: { textAlign: "right" } }, m.pending ? "Sending…" : clock(m.at))));
+      h("div", { class: "mine-meta" },
+        m.context ? h("span", { class: "ctx", title: m.context }, icon("file", 11), contextLabel(m.context)) : null,
+        h("span", { class: "meta" }, m.pending ? "Sending…" : clock(m.at)))));
   }
   const showAvatar = !prev || prev.role !== "bot";
   return h("div", { class: "msg" },
@@ -553,7 +554,7 @@ function setupBody(bot: BotStatus, d: BotDetail, models: ModelChoice[]): HTMLEle
   // Model: the providers and models the bots' T3 reports, with each model's effort levels.
   const vaultDefault = store.get().defaultModel;
   const provider = h("select", { "aria-label": "Provider" },
-    h("option", { value: "" }, `Vault default (${PROVIDER_LABEL[vaultDefault?.provider ?? "claude"] ?? vaultDefault?.provider ?? "Claude"})`),
+    h("option", { value: "" }, `Vault default: ${PROVIDER_LABEL[vaultDefault?.provider ?? "claude"] ?? vaultDefault?.provider ?? "Claude"}`),
     ["claude", "codex"].map((v) => h("option", { value: v }, PROVIDER_LABEL[v]))) as HTMLSelectElement;
   provider.value = def.model?.provider ?? "";
   const model = h("select", { "aria-label": "Model" }) as HTMLSelectElement;
