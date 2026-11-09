@@ -155,9 +155,12 @@ let toastHost: HTMLElement | undefined;
  */
 export function showToast(text: string, opts: { error?: boolean; action?: { label: string; run: () => void } } = {}): void {
   toastHost ??= document.body.appendChild(h("div", { class: "toasts", role: "status", "aria-live": "polite" }));
+  // The message is often an error from the server or a page address: it goes in as text content.
+  const message = document.createElement("span");
+  message.textContent = text;
   const el = h("div", { class: ["toast", opts.error && "error"] },
     h("span", { class: "toast-icon", "aria-hidden": "true" }, icon(opts.error ? "alert" : "check", 14)),
-    h("span", null, text),
+    message,
     opts.action ? h("button", { onclick: () => { dismissToast(el); opts.action!.run(); } }, opts.action.label) : null);
   toastHost.appendChild(el);
   const live = [...toastHost.querySelectorAll<HTMLElement>(".toast:not(.out)")];
