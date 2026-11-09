@@ -11,8 +11,8 @@ import { h, replace } from "../lib/dom.ts";
 import { icon } from "../lib/icons.ts";
 import { api } from "../lib/api.ts";
 import { botById, fail, go, isMobile, selectBot, sendMessage, store, toast } from "../state.ts";
-import type { AppOpen, PageData } from "../types.ts";
-import { confirmDialog } from "./common.ts";
+import type { AppOpen, AppServerInfo, PageData } from "../types.ts";
+import { confirmDialog, openModal } from "./common.ts";
 
 const SANDBOX = "allow-scripts allow-forms allow-modals allow-downloads";
 
@@ -47,6 +47,7 @@ export function renderApp(page: PageData): Node {
       return;
     }
     const app = opened.app;
+    const serverChip = h("button", { class: "app-chip server hidden" }) as HTMLButtonElement;
     const ctx: FrameContext = { path: page.path, root: app.root, owner: opened.owner, name: app.name };
     if (current?.path === page.path) current.root = app.root;
     replace(name, app.name);
@@ -54,26 +55,38 @@ export function renderApp(page: PageData): Node {
       h("span", { class: "app-chip", title: [app.root || "the vault", ...app.reads].join("\n") },
         icon("eye", 12), app.reads.length ? `Reads its folder and ${app.reads.length} more` : "Reads its folder"),
       h("span", { class: ["app-chip", app.network.length ? "online" : "offline"], title: app.network.join("\n") || "No internet" },
-        icon("link", 12), app.network.length ? `Online: ${app.network.map(host).join(", ")}` : "Offline"));
+        icon("link", 12), app.network.length ? `Online: ${app.network.map(host).join(", ")}` : "Offline"),
+      serverChip);
+    if (app.server?.allowed) {
+      showServerState(serverChip, app.server);
+      serverChip.onclick = () => showServer(app.root, app.name, () => void load());
+      void followServer(serverChip, app.root, view);
+    }
     replace(actions,
       h("button", { class: "icon-btn", title: "Reload the app", "aria-label": "Reload the app", onclick: () => void load() }, icon("refresh", 15)),
-      app.network.length ? h("button", {
-        class: "icon-btn", title: "Turn its internet off", "aria-label": "Turn its internet off",
+      app.network.length || app.server?.allowed ? h("button", {
+        class: "icon-btn", title: "Take back what it was allowed", "aria-label": "Take back what it was allowed",
         onclick: async () => {
-          if (!await confirmDialog("Turn this app's internet off?", `${app.name} will stop reaching ${app.network.join(", ")} until you allow it again.`, "Turn off")) return;
+          const what = [app.network.length ? `reaching ${app.network.join(", ")}` : "", app.server?.allowed ? "running its server" : ""].filter(Boolean).join(" and ");
+          if (!await confirmDialog("Take back what this app was allowed?", `${app.name} will stop ${what} until you allow it again.`, "Take back")) return;
           try { await api.post("/api/apps/revoke", { root: app.root }); await load(); } catch (err) { fail(err); }
         },
       }, icon("lock", 15)) : null);
-    if (app.asks.length) {
+    const asksServer = !!app.server?.asks;
+    if (app.asks.length || asksServer) {
       ask.classList.remove("hidden");
+      const wants = [
+        app.asks.length ? `to reach ${app.asks.join(", ")}` : "",
+        asksServer ? `to run its server (${app.server!.file}) in a sandbox on the computer running Peers, with internet access` : "",
+      ].filter(Boolean).join(", and ");
       replace(ask,
         icon("alert", 14),
-        h("span", null, `${app.name} asks to reach ${app.asks.join(", ")}. It can send what it reads there.`),
+        h("span", null, `${app.name} asks ${wants}. It can send what it reads${asksServer ? " and store data in its folder" : " there"}.`),
         h("button", {
           class: "btn primary",
           onclick: async () => {
             try {
-              await api.post("/api/apps/grant", { root: app.root, network: [...app.network, ...app.asks] });
+              await api.post("/api/apps/grant", { root: app.root, network: [...app.network, ...app.asks], server: asksServer || !!app.server?.allowed });
               await load();
             } catch (err) { fail(err); }
           },
@@ -100,6 +113,60 @@ export function appFilesChanged(paths: string[]): void {
   if (!paths.some(inside)) return;
   clearTimeout(reloadTimer);
   reloadTimer = window.setTimeout(() => c.reload(), 300);
+}
+
+function showServerState(chip: HTMLElement, s: Pick<AppServerInfo, "state" | "message"> & { file?: string }): void {
+  chip.className = `app-chip server ${s.state}`;
+  chip.title = s.message ?? "Show its output";
+  replace(chip, icon("zap", 12), serverLabel(s));
+}
+
+/** While the server starts, follow it until it runs or stops (the chip is drawn before it is up). */
+async function followServer(chip: HTMLElement, root: string, view: HTMLElement): Promise<void> {
+  for (let i = 0; i < 40 && view.isConnected && chip.isConnected; i++) {
+    await new Promise((ok) => setTimeout(ok, i < 10 ? 500 : 1500));
+    try {
+      const s = await api.get<AppServerInfo>(`/api/apps/server?root=${encodeURIComponent(root)}`);
+      showServerState(chip, s);
+      if (s.state !== "starting" && s.state !== "stopped") return;
+    } catch {
+      return;
+    }
+  }
+}
+
+function serverLabel(s: Pick<AppServerInfo, "state">): string {
+  return s.state === "running" ? "Server running" : s.state === "starting" ? "Server starting"
+    : s.state === "crashed" ? "Server stopped with an error" : s.state === "unavailable" ? "Server unavailable here" : "Server idle";
+}
+
+/** The server's state and recent output, with Restart and Stop. */
+function showServer(root: string, name: string, reload: () => void): void {
+  openModal((close) => {
+    const state = h("p", { class: "sub" }, "Loading…");
+    const log = h("pre", { class: "app-log" });
+    const refresh = async (): Promise<void> => {
+      try {
+        const s = await api.get<AppServerInfo & { log: string; log_file: string }>(`/api/apps/server?root=${encodeURIComponent(root)}`);
+        replace(state, `${serverLabel(s)}${s.message ? `: ${s.message}` : ""}. Full log: ${s.log_file}`);
+        replace(log, s.log.trim() || "No output yet.");
+        log.scrollTop = log.scrollHeight;
+      } catch (err) { fail(err); }
+    };
+    const act = (what: "restart" | "stop") => async (): Promise<void> => {
+      replace(state, what === "restart" ? "Restarting…" : "Stopping…");
+      try { await api.post(`/api/apps/server/${what}`, { root }); } catch (err) { fail(err); }
+      await refresh();
+      reload();
+    };
+    void refresh();
+    return h("div", { class: "app-server" },
+      h("h3", null, `${name}: server`), state, log,
+      h("div", { class: "actions" },
+        h("button", { class: "btn", onclick: act("stop") }, "Stop"),
+        h("button", { class: "btn", onclick: act("restart") }, "Restart"),
+        h("button", { class: "btn primary", onclick: close }, "Close")));
+  }, { label: `${name} server` });
 }
 
 function host(origin: string): string {

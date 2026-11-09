@@ -14,6 +14,10 @@ All notable changes to this project are documented here. The format follows
   parsed Markdown and Org pages, and tasks with deadlines, and follows changes. Sites it asks
   for stay blocked until the owner allows them. Agents are told how to build one, and the demo
   vault has a projects board.
+- **App servers** (ADR 0007). A manifest's `server` (Python or Node) runs on demand once the
+  owner allows it, under bubblewrap inside the container: its folder read-only, its `data/`
+  folder writable, no access to the vault or Peers' state except through the data API. The
+  app bar shows its state and output. The demo vault has an expense log with a Python server.
 - `/api` refuses requests from opaque origins and other sites outright.
 
 ## [0.1.0] - 2026-11-07

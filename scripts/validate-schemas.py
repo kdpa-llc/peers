@@ -92,6 +92,10 @@ CASES: list[tuple[str, str, dict, bool]] = [
     ("App asking for a network path, not an origin", "App", {"network": ["https://example.com/api"]}, False),
     ("App entry that is not a page", "App", {"entry": "app.js"}, False),
     ("App entry outside its folder", "App", {"entry": "/index.html"}, False),
+    ("App with a Python server", "App", {"name": "Expense log", "reads": ["Areas/Finances/**"], "server": "server.py"}, True),
+    ("App with a TypeScript server in a subfolder", "App", {"server": "api/main.ts"}, True),
+    ("App server that is not Node or Python", "App", {"server": "run.sh"}, False),
+    ("App server outside its folder", "App", {"server": "../server.py"}, False),
     ("Agent definition from an older version", "Bot", {
         "id": "bot-x-123", "name": "X", "model": {"provider": "claude-code", "thinking": "low"}, "daily_budget_usd": 5,
     }, True),

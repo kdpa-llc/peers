@@ -31,3 +31,10 @@ Rules that JSON Schema cannot express. Each has a number; the tests that enforce
 8. **Internet access waits for the owner and is limited to what the owner allowed.** The grant
    lives in Peers' state, not the vault; origins a manifest adds later stay blocked until the
    owner allows them too. (`tests/apps.test.ts`)
+9. **An app's server runs only with the owner's grant, and only in a sandbox that hides Peers'
+   state** (ADR 0007). Under bubblewrap it gets new namespaces, `/usr` and `/etc` read-only, its
+   app folder read-only, its `data/` folder as the only writable vault path, a private `/tmp`,
+   no `/proc`, no vault or state mount, and a clean environment; it reads the vault only through
+   the data API with the app's scope (#7). Every proxied request checks the current grant, and
+   taking the grant back stops the server and the app's tokens. Without a working sandbox it
+   does not start unless the operator turns the sandbox off. (`tests/appserver.test.ts`)

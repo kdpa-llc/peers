@@ -611,3 +611,13 @@ details.org-drawer[open] > summary { margin-bottom: 6px; }
   /* The app ends above the chat bar and the tab bar, which float over the pane. */
   .page-scroll.app-mode { padding-bottom: 136px; }
 }
+button.app-chip { border: 0; font: inherit; color: inherit; cursor: pointer; }
+.app-chip.hidden { display: none; }
+.app-chip.server.running { color: var(--accent-text); }
+.app-chip.server.crashed, .app-chip.server.unavailable { color: var(--attention); }
+.app-server { min-width: min(640px, 86vw); }
+.app-log {
+  max-height: 50vh; overflow: auto; margin: 8px 0 12px; padding: 10px 12px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line); font: 12px/1.45 var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap; word-break: break-word;
+}

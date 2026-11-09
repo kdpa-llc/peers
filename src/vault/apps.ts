@@ -32,6 +32,8 @@ export type AppManifest = {
   entry?: string;
   reads?: string[];
   network?: string[];
+  /** Server code Peers runs in a sandbox once the owner allows it (ADR 0007). */
+  server?: string;
 };
 
 /** An app as the server resolves it from a vault path. */
@@ -47,6 +49,8 @@ export type AppInfo = {
   reads: string[];
   /** Origins the manifest asks for. */
   network: string[];
+  /** Its server file, relative to `root`, when it has one. */
+  server?: string;
 };
 
 export class AppError extends Error {
@@ -58,13 +62,14 @@ export class AppError extends Error {
 
 // ------------------------------------------------------------------ manifests
 
+export const SERVER_FILE = /\.(ts|mts|js|mjs|cjs|py)$/i;
 const ORIGIN = /^https:\/\/(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?$/;
 
 /** Check a manifest against docs/specs/app.schema.json. */
 export function validateManifest(raw: unknown): AppManifest {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new AppError("peers.app.json must be a JSON object");
   const m = raw as Record<string, unknown>;
-  const known = new Set(["name", "description", "entry", "reads", "network"]);
+  const known = new Set(["name", "description", "entry", "reads", "network", "server"]);
   for (const k of Object.keys(m)) if (!known.has(k)) throw new AppError(`peers.app.json has an unknown field "${k}"`);
   const out: AppManifest = {};
   if (m.name !== undefined) {
@@ -91,6 +96,14 @@ export function validateManifest(raw: unknown): AppManifest {
       }
       return r;
     });
+  }
+  if (m.server !== undefined) {
+    const f = m.server;
+    if (typeof f !== "string" || !f || f.length > 200 || f.startsWith("/") || f.includes("\\") ||
+      /(^|\/)\./.test(f) || /[\u0000-\u001f]/.test(f) || !SERVER_FILE.test(f)) {
+      throw new AppError("server must be a .ts, .js or .py file inside the app folder");
+    }
+    out.server = f;
   }
   if (m.network !== undefined) {
     if (!Array.isArray(m.network) || m.network.length > 20) throw new AppError("network must be a list of up to 20 origins");
@@ -138,10 +151,12 @@ export function findApp(root: string, input: string): AppInfo | undefined {
     const m = readManifest(root, appFolder);
     const entry = !isDir(abs) && APP_PAGE.test(path) ? path.slice(appFolder.length + 1) : m.entry ?? "index.html";
     if (!existsSync(join(root, appFolder, entry))) throw new AppError(`${appFolder}/${entry} does not exist`);
+    if (m.server && !existsSync(join(root, appFolder, m.server))) throw new AppError(`${appFolder}/${m.server} does not exist`);
     return {
       root: appFolder, entry, manifest: true, name: m.name ?? basename(appFolder),
       ...(m.description ? { description: m.description } : {}),
       reads: m.reads ?? [], network: m.network ?? [],
+      ...(m.server ? { server: m.server } : {}),
     };
   }
   if (isDir(abs) || !APP_PAGE.test(path)) return undefined;
@@ -193,9 +208,12 @@ function requireReadable(root: string, app: Pick<AppInfo, "root" | "reads">, inp
 export type AppSession = {
   token: string;
   app: AppInfo;
+  /** The device that opened it, or `server:<root>` for an app server's own token. */
   device: string;
   /** Origins the owner allowed that the manifest still asks for. */
   network: string[];
+  /** Whether the owner allowed its server. */
+  server: boolean;
   expires: number;
 };
 
@@ -203,14 +221,14 @@ export type AppSession = {
 export class AppSessions {
   private readonly byToken = new Map<string, AppSession>();
 
-  open(app: AppInfo, device: string, network: string[], now: Date): AppSession {
+  open(app: AppInfo, device: string, grant: { network: string[]; server: boolean }, now: Date, hours = APP_TOKEN_HOURS): AppSession {
     if (this.byToken.size >= MAX_SESSIONS) {
-      const oldest = this.byToken.keys().next().value;
-      if (oldest) this.byToken.delete(oldest);
+      const oldest = [...this.byToken.values()].find((s) => !s.device.startsWith("server:"));
+      if (oldest) this.byToken.delete(oldest.token);
     }
     const session: AppSession = {
-      token: randomBytes(24).toString("base64url"), app, device, network,
-      expires: now.getTime() + APP_TOKEN_HOURS * 3600_000,
+      token: randomBytes(24).toString("base64url"), app, device, network: grant.network, server: grant.server,
+      expires: now.getTime() + hours * 3600_000,
     };
     this.byToken.set(session.token, session);
     return session;
@@ -224,6 +242,22 @@ export class AppSessions {
       return undefined;
     }
     return s;
+  }
+
+  revoke(token: string): void {
+    this.byToken.delete(token);
+  }
+
+  /** Every token for an app's frames (not its server's own), when the owner takes back a grant. */
+  revokeApp(root: string): number {
+    let n = 0;
+    for (const [token, s] of this.byToken) {
+      if (s.app.root === root && !s.device.startsWith("server:")) {
+        this.byToken.delete(token);
+        n++;
+      }
+    }
+    return n;
   }
 
   revokeDevice(device: string): number {
@@ -242,7 +276,7 @@ export class AppSessions {
   }
 }
 
-export type AppGrant = { network: string[] };
+export type AppGrant = { network: string[]; server?: boolean };
 
 /** What the owner allowed each app, kept in Peers' state so the vault cannot grant itself. */
 export class AppGrants {
@@ -257,7 +291,10 @@ export class AppGrants {
     if (!row?.grant_json) return { network: [] };
     try {
       const g = JSON.parse(row.grant_json) as Partial<AppGrant>;
-      return { network: Array.isArray(g.network) ? g.network.filter((o) => typeof o === "string") : [] };
+      return {
+        network: Array.isArray(g.network) ? g.network.filter((o) => typeof o === "string") : [],
+        ...(g.server === true ? { server: true } : {}),
+      };
     } catch {
       return { network: [] };
     }
@@ -275,9 +312,10 @@ export class AppGrants {
 }
 
 /** What an app may use now, and what it asks for beyond that. */
-export function effectiveNetwork(app: AppInfo, grant: AppGrant): { allowed: string[]; asks: string[] } {
+export function effectiveGrant(app: AppInfo, grant: AppGrant): { allowed: string[]; asks: string[]; server: boolean; asksServer: boolean } {
   const allowed = app.network.filter((o) => grant.network.includes(o));
-  return { allowed, asks: app.network.filter((o) => !allowed.includes(o)) };
+  const server = !!app.server && grant.server === true;
+  return { allowed, asks: app.network.filter((o) => !allowed.includes(o)), server, asksServer: !!app.server && !server };
 }
 
 // ------------------------------------------------------------------ the frame's policy
@@ -477,7 +515,7 @@ export function appData(root: string, session: AppSession, name: string, params:
   try {
     if (name === "app") {
       return json(200, {
-        name: app.name, root: app.root, entry: app.entry, reads: app.reads, network: session.network,
+        name: app.name, root: app.root, entry: app.entry, reads: app.reads, network: session.network, server: session.server,
         ...(app.description ? { description: app.description } : {}),
       });
     }
@@ -598,6 +636,20 @@ export const HELPER = `/* Peers app helper (ADR 0006). Paths are vault paths, li
     open: function (path) { post({ type: "open", path: String(path) }); },
     /** Propose a message to this folder's agent; the owner confirms before it is sent. */
     ask: function (text) { post({ type: "ask", text: String(text) }); },
+    /** Call the app's server (ADR 0007): fetch(path under _api/, init). */
+    api: function (path, init) { return fetch(base + "_api/" + String(path || "").replace(/^\\/+/, ""), init); },
+    /** POST JSON to the app's server and read JSON back; GET when data is undefined. */
+    call: function (path, data) {
+      var init = data === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) };
+      return window.peers.api(path, init).then(function (r) {
+        return r.text().then(function (t) {
+          var body = t;
+          try { body = t ? JSON.parse(t) : null; } catch (e) { /* not JSON */ }
+          if (!r.ok) throw new Error((body && body.error) || t || r.statusText);
+          return body;
+        });
+      });
+    },
     /** URL of a file in this app, for links and images. */
     url: function (path) { return base + String(path).replace(/^\\/+/, ""); }
   };

@@ -1,0 +1,6 @@
+{
+  "name": "Expense log",
+  "description": "Log what you spend; totals by month and by category.",
+  "reads": ["Areas/Finances/**"],
+  "server": "server.py"
+}

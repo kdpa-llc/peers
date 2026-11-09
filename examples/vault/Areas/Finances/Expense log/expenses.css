@@ -1,0 +1,15 @@
+:root { color-scheme: light; --bg: #faf9f6; --card: #fff; --text: #1f2328; --muted: #6b6f76; --line: #e4e1da; --accent: #0e7c7b; }
+:root[data-theme="night"] { color-scheme: dark; --bg: #0f1216; --card: #1b2129; --text: #e6e8eb; --muted: #9aa1aa; --line: #262d36; --accent: #3fb8b4; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 28px 48px; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+h1 { margin: 0 0 16px; font-size: 26px; letter-spacing: -0.02em; }
+form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+input, button { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+input[name="note"] { flex: 1; min-width: 140px; }
+button { background: var(--accent); border-color: var(--accent); color: #fff; cursor: pointer; }
+#status { color: #b42318; min-height: 1em; margin: 4px 0; }
+#totals { color: var(--muted); margin: 6px 0 14px; }
+table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+td:nth-child(2) { font-variant-numeric: tabular-nums; }

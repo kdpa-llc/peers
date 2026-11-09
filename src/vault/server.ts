@@ -7,7 +7,7 @@
  * (DNS rebinding). Client modules are TypeScript served as JavaScript after type stripping,
  * so there is no build step.
  */
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize, resolve, sep } from "node:path";
@@ -38,6 +38,10 @@ const SESSION_DAYS = 90;
 const PAIR_MINUTES = 10;
 const JSON_LIMIT = 1024 * 1024;
 const ATTACHMENT_LIMIT = 2 * 1024 * 1024;
+/** Request bodies an app sends its server, and how long Peers waits for an answer (ADR 0007). */
+const APP_BODY_LIMIT = 10 * 1024 * 1024;
+const APP_TIMEOUT_MS = 60_000;
+const HOP_BY_HOP = ["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade"];
 
 export type ServerOptions = {
   port?: number;
@@ -115,6 +119,8 @@ export class VaultServer {
     const addr = this.server.address();
     // Port 0 asks the OS for a free port; Host and Origin checks need the real one.
     if (typeof addr === "object" && addr) this.port = addr.port;
+    // App servers reach the data API over loopback, whatever address Peers is bound to.
+    this.app.appServers.setApiOrigin(this.host === "::1" ? `http://[::1]:${this.port}` : `http://127.0.0.1:${this.port}`);
     return this.port;
   }
 
@@ -418,9 +424,12 @@ export class VaultServer {
     if (method === "POST" && p === "/api/apps/grant") {
       const b = await this.json(ctx.req);
       const network = Array.isArray(b.network) ? b.network.map(String).slice(0, 20) : [];
-      return this.send(res, 200, app.grantApp(String(b.root ?? ""), network));
+      return this.send(res, 200, app.grantApp(String(b.root ?? ""), network, b.server === true));
     }
-    if (method === "POST" && p === "/api/apps/revoke") return this.send(res, 200, app.revokeApp(String((await this.json(ctx.req)).root ?? "")));
+    if (method === "POST" && p === "/api/apps/revoke") return this.send(res, 200, await app.revokeApp(String((await this.json(ctx.req)).root ?? "")));
+    if (method === "GET" && p === "/api/apps/server") return this.send(res, 200, app.appServer(q("root")));
+    if (method === "POST" && p === "/api/apps/server/restart") return this.send(res, 200, await app.restartAppServer(String((await this.json(ctx.req)).root ?? "")));
+    if (method === "POST" && p === "/api/apps/server/stop") return this.send(res, 200, await app.stopAppServer(String((await this.json(ctx.req)).root ?? "")));
     if (method === "GET" && p === "/api/events") return this.events(ctx);
     return this.send(res, 404, { error: "not found" });
   }
@@ -468,7 +477,7 @@ export class VaultServer {
    * Everything under `/apps/<token>/`: the app's files, and under `_peers/` its read-only data
    * API. No session is read or needed here; the token is the capability.
    */
-  private serveApp(ctx: Ctx): void {
+  private serveApp(ctx: Ctx): void | Promise<void> {
     const { req, res, url } = ctx;
     const method = req.method ?? "GET";
     const m = /^\/apps\/([A-Za-z0-9_-]{20,64})\/(.*)$/.exec(url.pathname);
@@ -481,22 +490,25 @@ export class VaultServer {
       return this.send(res, 404, { error: "this app link has expired; open the app again" });
     }
     res.setHeader("Content-Security-Policy", appCsp(this.browserOrigin(req), session.token, session.network));
+    // `_peers/` is Peers' data API and `_api/` the app's own server, at any depth of the app.
+    const raw = m![2]!;
+    const segments = raw.split("/");
+    const at = segments.findIndex((x) => x === "_peers" || x === "_api");
+    if (at >= 0 && segments[at] === "_api") return this.proxyApp(ctx, session, segments.slice(at + 1).join("/"));
     if (method === "OPTIONS") {
       res.writeHead(204, { "Access-Control-Allow-Methods": "GET, HEAD", "Access-Control-Max-Age": "600" });
       return void res.end();
     }
-    if (method !== "GET" && method !== "HEAD") return this.send(res, 405, { error: "apps read the vault; they do not change it" });
+    if (method !== "GET" && method !== "HEAD") return this.send(res, 405, { error: "apps read the vault; they change it only through their server" });
     let sub: string;
     try {
-      sub = decodeURIComponent(m![2]!);
+      sub = decodeURIComponent(raw);
     } catch {
       return this.send(res, 400, { error: "bad path" });
     }
-    const parts = sub.split("/");
-    const api = parts.indexOf("_peers");
     let reply: AppReply;
-    if (api >= 0) {
-      const name = parts.slice(api + 1).join("/");
+    if (at >= 0) {
+      const name = segments.slice(at + 1).map((x) => decodeURIComponent(x)).join("/");
       if (name === "events") return this.appEvents(ctx, session);
       reply = appData(this.app.root, session, name, url.searchParams);
     } else {
@@ -505,6 +517,66 @@ export class VaultServer {
     const body = typeof reply.body === "string" ? Buffer.from(reply.body) : reply.body;
     res.writeHead(reply.status, { "Content-Type": reply.type, "Content-Length": String(body.length) });
     res.end(method === "HEAD" ? undefined : body);
+  }
+
+  /**
+   * `_api/…` goes to the app's own server (ADR 0007), once the owner allowed it. Peers answers
+   * the CORS preflight itself, sends no cookies or Peers headers on, and keeps its own CSP
+   * and CORS headers on the answer.
+   */
+  private async proxyApp(ctx: Ctx, session: AppSession, rest: string): Promise<void> {
+    const { req, res, url } = ctx;
+    const method = req.method ?? "GET";
+    if (method === "OPTIONS") {
+      const asked = String(req.headers["access-control-request-headers"] ?? "").replace(/[^\w, -]/g, "").slice(0, 400);
+      res.writeHead(204, {
+        "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE",
+        ...(asked ? { "Access-Control-Allow-Headers": asked } : {}),
+        "Access-Control-Max-Age": "600",
+      });
+      return void res.end();
+    }
+    if (!session.app.server) return this.send(res, 404, { error: "this app has no server" });
+    if (!session.server || !this.app.appServerAllowed(session.app)) return this.send(res, 403, { error: "the owner has not allowed this app's server" });
+    let port: number;
+    try {
+      port = await this.app.appServers.ensure(session.app);
+    } catch (err) {
+      return this.send(res, 503, { error: (err as Error).message });
+    }
+    const body = method === "GET" || method === "HEAD" ? undefined : await this.raw(req, APP_BODY_LIMIT);
+    const headers: Record<string, string | string[]> = {};
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (v === undefined || HOP_BY_HOP.includes(k) || k === "cookie" || k === "host" || k.startsWith("x-forwarded-") || k === "origin" || k === "referer") continue;
+      headers[k] = v;
+    }
+    headers.host = `127.0.0.1:${port}`;
+    headers["x-peers-app"] = encodeURIComponent(session.app.root);
+    if (body) headers["content-length"] = String(body.length);
+    this.app.appServers.touch(session.app.root);
+    await new Promise<void>((done) => {
+      const upstream = httpRequest({ host: "127.0.0.1", port, method, path: `/${rest}${url.search}`, headers }, (up) => {
+        const out: Record<string, string | string[]> = {};
+        for (const [k, v] of Object.entries(up.headers)) {
+          if (v === undefined || HOP_BY_HOP.includes(k) || k === "set-cookie" || k.startsWith("access-control-") ||
+            k === "content-security-policy" || k === "x-frame-options") continue;
+          out[k] = v;
+        }
+        res.writeHead(up.statusCode ?? 502, out);
+        up.pipe(res);
+        up.on("end", done);
+        up.on("error", () => { res.destroy(); done(); });
+      });
+      upstream.setTimeout(APP_TIMEOUT_MS, () => upstream.destroy(new Error("the app's server took too long")));
+      upstream.on("error", (err) => {
+        if (!res.headersSent) this.send(res, 502, { error: `the app's server did not answer: ${err.message}` });
+        else res.destroy();
+        done();
+      });
+      // The browser went away before the answer finished.
+      res.on("close", () => { if (!res.writableEnded) upstream.destroy(); });
+      upstream.end(body);
+    });
   }
 
   /** Change events for what an app can read. */

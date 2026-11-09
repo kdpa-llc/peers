@@ -34,6 +34,7 @@ src/vault/
   schedules.ts           slot arithmetic in a time zone
   layout.ts              layouts, presets, path patterns, front pages
   apps.ts                app pages: manifests, read scope, capability tokens, grants, the frame's CSP, data API
+  appserver.ts           app servers: bubblewrap sandbox, start on demand, idle stop, restarts, logs
   bots.ts                agents: homes, definitions, ownership, write scope
   vault.ts paths.ts      tree, PARA roots, ownership, path policy
   markdown.ts            shared parser (server tests and browser)
@@ -334,7 +335,8 @@ All `/api` routes need a session (§13). Writes need `X-Peers: 1` and a matching
 | `POST /api/pairing-codes`, `GET /api/devices`, `DELETE /api/devices/:id` | Devices |
 | `GET /api/events` | Server-sent events |
 | `POST /api/apps/open { path }` | Open an app for this device: `{ url: /apps/<token>/…, app, owner }` (§12a) |
-| `POST /api/apps/grant { root, network }`, `/api/apps/revoke { root }` | Allow an app the sites its manifest asks for; take it back |
+| `POST /api/apps/grant { root, network, server }`, `/api/apps/revoke { root }` | Allow an app the sites and the server its manifest asks for; take it all back |
+| `GET /api/apps/server?root=`, `POST /api/apps/server/restart`, `/stop { root }` | An app server's state and recent output; restart or stop it |
 
 **Events**: `id: <epoch>:<seq>`. Types: `file.changed`, `tree.changed`, `thread.updated`,
 `bots.changed`, `annotation.updated`, `seen.changed`, `today.changed`, `state.changed`. The
@@ -368,7 +370,7 @@ conversation every 1.5 s while its bot is working, so replies appear as T3 write
   (12 hours; revoked with the device; gone on restart). Everything the frame loads is under
   `/apps/<token>/`: the app's own files, and `_peers/` at any depth for `peers.js` and the data
   API (`app`, `file`, `list`, `page`, `tasks`, `events`). Each path goes through the path policy
-  (#1) and the app's scope: its folder plus `reads` (#7). GET and HEAD only.
+  (#1) and the app's scope: its folder plus `reads` (#7). GET and HEAD only, except `_api/`.
 - **CSP on every `/apps/` response**: `sandbox …` (no `allow-same-origin`, no popups or top
   navigation), sources limited to `<origin>/apps/<token>/` plus granted origins, inline script and
   `eval` allowed inside, `form-action 'none'`, `frame-ancestors <origin>`. The origin is the one the
@@ -381,6 +383,17 @@ conversation every 1.5 s while its bot is working, so replies appear as T3 write
   window with origin `null`. Peers sends the theme (`#theme=`, then `theme` messages).
 - **Reloads**: a change to the entry page re-renders it; a change elsewhere in the app folder,
   except `data/`, reloads the frame; resizes and live updates keep it.
+- **Servers** (`appserver.ts`, ADR 0007): `"server"` in the manifest, allowed by the owner like a
+  site. `_api/…` at any depth proxies to it (preflight answered by Peers; no cookie, origin or
+  forwarded headers sent on; `Set-Cookie`, CSP and CORS stripped from its answer; 10 MB, 60 s).
+  It runs under `bwrap --unshare-all --share-net --die-with-parent --new-session --clearenv` with
+  `/usr` and `/etc` read-only, the app folder read-only at `/app`, `data/` writable at
+  `/app/data`, a private `/tmp` and no `/proc` (#9). Its environment: `PORT`, `HOST`,
+  `PEERS_API` (the data API with the server's own token), `PEERS_APP`, `PEERS_DATA`, `PATH`,
+  `HOME=/tmp`. It starts on open or first request, stops after 10 idle minutes, restarts after a
+  code change, at most 4 run, and 3 exits in a minute stop restarts. Output goes to
+  `<state>/apps/<folder>.log` and the app bar. Its `data/` writes are credited to the app.
+  Without bubblewrap it does not start; `PEERS_APP_SANDBOX=off` is for development.
 
 ## 13. Security
 

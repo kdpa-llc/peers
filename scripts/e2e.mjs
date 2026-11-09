@@ -44,7 +44,8 @@ const port = 4800 + Math.floor(Math.random() * 400);
 const cli = ["--experimental-strip-types", "--no-warnings", join(ROOT, "src", "cli", "main.ts"), "serve"];
 const server = spawn(process.execPath, [...cli, vault, "--scripted", "--port", String(port), "--state-dir", state], {
   // A fixed owner name, so screenshots never carry the name of whoever runs the journey.
-  cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, USER: "sam" },
+  // App servers run unsandboxed here: bubblewrap exists only in the container (ADR 0007).
+  cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, USER: "sam", PEERS_APP_SANDBOX: "off" },
 });
 let log = "";
 server.stdout.on("data", (d) => { log += d; });
@@ -395,6 +396,32 @@ try {
     await board.locator(".card h2 a").first().click();
     await page.waitForFunction(() => decodeURI(location.hash).includes("/p/Projects/"));
     await page.waitForSelector(".page-body .md-block, .page-body .org-drawer, .page-body h2");
+  });
+
+  await stage("an app with a server: allow it, add an expense, find it in the vault", async () => {
+    // Until it is allowed, the app's calls to its server are refused: that is the point.
+    probing = true;
+    await page.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Areas/Finances/Expense log/index.html")}`);
+    await page.waitForSelector(".app-ask >> text=run its server");
+    const log = page.frameLocator(".app-frame");
+    await log.locator("#status").waitFor({ state: "attached" });
+    await page.locator(".app-ask button", { hasText: "Allow" }).click();
+    await page.waitForSelector(".app-ask.hidden", { state: "attached" });
+    await page.waitForTimeout(300);
+    probing = false;
+    await log.locator("#totals", { hasText: "Nothing logged yet" }).waitFor({ timeout: 15000 });
+    await log.locator("input[name=amount]").fill("42.50");
+    await log.locator("input[name=category]").fill("groceries");
+    await log.locator("input[name=note]").fill("market");
+    await log.locator("button[type=submit]").click();
+    await log.locator("#rows td", { hasText: "groceries" }).waitFor({ timeout: 10000 });
+    const csv = readFileSync(join(vault, "Areas/Finances/Expense log/data/expenses.csv"), "utf8");
+    ok(/groceries/.test(csv) && /42\.50/.test(csv), `saved in the app's data folder (${csv.trim()})`);
+    await page.waitForSelector(".app-chip.server.running");
+    await page.screenshot({ path: join(SHOTS, "desktop-app-server-night.png") });
+    await page.locator(".app-chip.server").click();
+    await page.waitForSelector(".modal .app-log >> text=expense log on port");
+    await page.locator(".modal .actions button", { hasText: "Close" }).click();
   });
 
   await stage("API refuses requests without a session or the CSRF header", async () => {

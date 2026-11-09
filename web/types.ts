@@ -98,7 +98,17 @@ export type AppOpen = {
     network: string[];
     /** Origins it asks for that the owner has not allowed. */
     asks: string[];
+    /** Its server (ADR 0007): whether it is allowed or asked for, and its state. */
+    server?: AppServerInfo;
   };
+};
+
+export type AppServerInfo = {
+  file: string;
+  allowed: boolean;
+  asks: boolean;
+  state: "stopped" | "starting" | "running" | "crashed" | "unavailable";
+  message?: string;
 };
 
 export type Quote = { exact: string; prefix?: string; suffix?: string };

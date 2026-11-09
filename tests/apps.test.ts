@@ -156,7 +156,7 @@ test("#7 an app reads its own folder and its reads, through the path policy, and
     assert.ok(tasks.some((t) => t.title === "Measure" && t.done === true));
 
     const info = JSON.parse((await data("app")).body);
-    assert.deepEqual(info, { name: "Board", root: "Dashboards/Board", entry: "index.html", reads: ["Projects/**"], network: [] });
+    assert.deepEqual(info, { name: "Board", root: "Dashboards/Board", entry: "index.html", reads: ["Projects/**"], network: [], server: false });
     // The helper answers at any depth, so nested pages can load it with a relative URL.
     const helper = await call(c.port, `${base}/views/_peers/peers.js`);
     assert.equal(helper.status, 200);
@@ -203,7 +203,7 @@ test("#8 internet access waits for the owner, only for what was asked, and stays
     const grant = (network: string[]): Promise<Res> =>
       call(c.port, "/api/apps/grant", { method: "POST", headers: c.json, body: JSON.stringify({ root: "Dashboards/Board", network }) });
     assert.equal((await grant(["https://evil.example.com"])).status, 400, "only what the manifest asks for");
-    assert.equal((await call(c.port, "/api/apps/grant", { method: "POST", headers: c.json, body: JSON.stringify({ root: "Inbox", network: [] }) })).status, 400);
+    assert.equal((await call(c.port, "/api/apps/grant", { method: "POST", headers: c.json, body: JSON.stringify({ root: "Inbox", network: [] }) })).status, 404, "not an app");
     assert.equal((await grant(["https://cdn.example.com"])).status, 200);
     o = await open(c, "Dashboards/Board");
     assert.deepEqual([o.app.network, o.app.asks], [["https://cdn.example.com"], []]);

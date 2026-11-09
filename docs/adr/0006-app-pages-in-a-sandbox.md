@@ -49,4 +49,4 @@ script would own the vault.
   container (ADR 0004), so apps add no new way out for an agent.
 - Inline scripts and `eval` are allowed inside the frame, so ordinary frameworks and
   libraries work. Agents are told to keep libraries as files in the app folder.
-- Server code for apps is ADR 0007.
+- Server code for apps, which can store data, is ADR 0007.

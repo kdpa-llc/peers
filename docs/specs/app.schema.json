@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kdpa-llc.github.io/peers/specs/app.schema.json",
   "title": "App",
-  "description": "An app folder's peers.app.json (ADR 0006). The folder is a small web app that Peers shows in a sandboxed frame: its own files, plus read-only access to the vault paths listed in `reads`. Internet access to the origins in `network` waits until the owner allows it.",
+  "description": "An app folder's peers.app.json (ADR 0006, ADR 0007). The folder is a small web app that Peers shows in a sandboxed frame: its own files, plus read-only access to the vault paths listed in `reads`. Internet access to the origins in `network`, and running its `server`, wait until the owner allows them.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -33,9 +33,15 @@
         "maxLength": 300,
         "not": {
           "anyOf": [
-            { "pattern": "\\.\\." },
-            { "pattern": "(^|/)\\." },
-            { "pattern": "^/" }
+            {
+              "pattern": "\\.\\."
+            },
+            {
+              "pattern": "(^|/)\\."
+            },
+            {
+              "pattern": "^/"
+            }
           ]
         }
       }
@@ -48,6 +54,13 @@
         "type": "string",
         "pattern": "^https://(\\*\\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:[0-9]{1,5})?$"
       }
+    },
+    "server": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?!/)(?!.*(^|/)\\.)(?!.*\\\\)[^\\u0000-\\u001f]*\\.(ts|mts|js|mjs|cjs|py)$",
+      "description": "A Node (.ts, .js) or Python (.py) file in the app folder that serves HTTP on $PORT. Peers runs it on demand in a sandbox once the owner allows it; the app's pages call it under `_api/`."
     }
   }
 }

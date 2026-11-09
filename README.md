@@ -75,7 +75,7 @@ Agents are Claude Code or Codex sessions on [T3 Code][t3], signed in with their 
 - 📣 **@mentions** — `@Finances can we afford it?` from any chat reaches the Finances agent too, in a conversation that links back
 - 👀 **Changed since you last looked** — changed blocks marked on the page, a dot in the tree, and a list on Today
 - 📝 **Markdown and Org** — wikilinks, embeds, callouts, front matter; Org task states, priorities, tags, drawers and planning lines; images and PDFs
-- 🧩 **Apps in the vault** — ask an agent for a dashboard or a small tool and it builds a web app in a folder; it runs in a sandbox that reads only what it lists and stays offline until you allow a site
+- 🧩 **Apps in the vault** — ask an agent for a dashboard or a small tool and it builds a web app in a folder; it runs in a sandbox that reads only what it lists and stays offline until you allow a site, with an optional Python or Node server sandboxed in the container
 - ⏰ **Schedules and file triggers** — with guards that stop agents from waking each other in a loop
 - 🔐 **Separate sign-ins** — the agents' Claude Code and Codex accounts live in the container, apart from your own
 - 📱 **Phone and desktop** — an installable web app; HTTPS from the phone through Tailscale Serve, with device pairing
@@ -196,8 +196,9 @@ Any `.html` file in the vault opens as an app page. A folder with a `peers.app.j
 - `reads`: vault paths it may read besides its own folder, as layout patterns
 - `network`: sites it may load from or talk to, once you allow them; without it the app is offline
 - `entry`: the page that opens (default `index.html`)
+- `server`: a `.py`, `.ts` or `.js` file serving HTTP on `$PORT`, for apps that store data or run code. Once you allow it, Peers runs it on demand in a bubblewrap sandbox inside the container: it sees its own folder read-only, writes only in its `data/` folder, and reads notes through `$PEERS_API` with the app's `reads`
 
-In the app, `<script src="_peers/peers.js"></script>` gives `peers.text(path)`, `peers.json(path)`, `peers.list(folder)`, `peers.page(path)` (a parsed Markdown or Org page), `peers.tasks(path)` (tasks with their deadlines), `peers.onChange(fn)`, `peers.open(path)` and `peers.ask(text)`, which proposes a message to the folder's agent for you to confirm. The demo vault has one in `Dashboards/Projects board`. Schema: [`docs/specs/app.schema.json`](docs/specs/app.schema.json).
+In the app, `<script src="_peers/peers.js"></script>` gives `peers.text(path)`, `peers.json(path)`, `peers.list(folder)`, `peers.page(path)` (a parsed Markdown or Org page), `peers.tasks(path)` (tasks with their deadlines), `peers.onChange(fn)`, `peers.open(path)` and `peers.ask(text)`, which proposes a message to the folder's agent for you to confirm. `peers.call(path, data)` talks to the app's server. The demo vault has a projects board in `Dashboards/Projects board` and an expense log with a Python server in `Areas/Finances/Expense log`. Schema: [`docs/specs/app.schema.json`](docs/specs/app.schema.json).
 
 ### Command-Line Options
 
@@ -251,6 +252,7 @@ Design: [`docs/design/`](docs/design/README.md). Decisions: [`docs/adr/`](docs/a
 - Every write needs an `X-Peers` header and a matching `Origin`; the `Host` header is checked (DNS rebinding)
 - Pages are never rendered as HTML, and raw files are served sandboxed
 - Apps run in a sandboxed frame with an opaque origin: no cookies, no Peers API, only the paths they list, and no internet until you allow named sites
+- App servers run only once you allow them, in bubblewrap inside the container, where they cannot see the agents' sign-ins or Peers' state
 - Agents can do what Claude Code and Codex can do inside the container, and nothing outside it
 - There is no Undo: keep the vault in Git, Time Machine or a sync tool with versions
 

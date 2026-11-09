@@ -54,6 +54,8 @@ export class Conversations {
   private readonly registry: BotRegistry;
   private readonly root: string;
   readonly transcriptsDir: string;
+  /** Where app servers log (ADR 0007), for the brief. */
+  readonly appLogsDir: string;
   private readonly settings: () => VaultSettings;
   private readonly layout: () => Layout;
   private readonly now: () => Date;
@@ -69,6 +71,7 @@ export class Conversations {
     this.registry = args.registry;
     this.root = args.root;
     this.transcriptsDir = join(args.stateDir, "conversations");
+    this.appLogsDir = join(args.stateDir, "apps");
     this.settings = args.settings;
     this.layout = args.layout;
     this.now = args.now;
@@ -128,6 +131,7 @@ export class Conversations {
       rules: layout.rules,
       readonly: layout.readonly,
       conversationsDir: this.transcriptsDir,
+      appLogsDir: this.appLogsDir,
     });
   }
 
