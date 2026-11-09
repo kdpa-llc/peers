@@ -21,7 +21,7 @@ let detailCache: { id: string; data: BotDetail } | undefined;
 
 export function mountBot(pane: HTMLElement): void {
   const rail = h("div", { class: "rail" },
-    h("button", { class: "icon-btn", title: "Show bot (⌘⇧\\)", "aria-label": "Show bot", onclick: () => toggleBotPane() }, icon("sidebarRight", 18)));
+    h("button", { class: "icon-btn", title: "Show chat (⌘⇧\\)", "aria-label": "Show chat", onclick: () => toggleBotPane() }, icon("sidebarRight", 18)));
   const head = h("div", { class: "bot-head" });
   const bar = h("div", { class: "conv-bar" });
   const body = h("div", { class: "bot-body" });
@@ -37,19 +37,18 @@ export function mountBot(pane: HTMLElement): void {
         avatar(bot, 36),
         h("div", { class: "who" },
           h("div", { class: "name" }, h("span", null, bot.name),
-            bot.needs_review ? h("span", { class: "badge" }, "Review") : null,
-            s.pinned ? h("span", { class: "badge pinned" }, "Pinned") : null),
+            bot.needs_review ? h("span", { class: "badge" }, "Review") : null),
           h("div", { class: "status", title: statusText(bot, s.activity[bot.id]) }, statusText(bot, s.activity[bot.id]))),
         running
           ? h("button", { class: "icon-btn", title: "Stop", "aria-label": "Stop", onclick: () => stop(bot) }, icon("pause", 16))
           : h("button", { class: "icon-btn", title: "Run now", "aria-label": "Run now", onclick: () => runNow(bot) }, icon("play", 16)),
         h("button", {
-          class: ["icon-btn", s.pinned && "active"], title: s.pinned ? "Unpin (follow the page)" : "Pin this bot",
+          class: ["icon-btn", s.pinned && "active"], title: s.pinned ? "Unpin (follow the page)" : "Pin this agent",
           "aria-label": s.pinned ? "Unpin" : "Pin", onclick: () => store.set({ pinned: !s.pinned }),
         }, icon("pin", 16)),
         // Memory, triggers and setup are used rarely, so they live on their own page.
-        h("button", { class: "icon-btn", title: "Bot settings: instructions, memory, triggers", "aria-label": "Bot settings", onclick: () => go({ view: "bot", id: bot.id }) }, icon("settings", 16)),
-        h("button", { class: "icon-btn", title: "Hide (⌘⇧\\)", "aria-label": "Hide bot pane", onclick: () => toggleBotPane() }, icon("sidebarRight", 16))));
+        h("button", { class: "icon-btn", title: "Agent settings: instructions, memory, triggers", "aria-label": "Agent settings", onclick: () => go({ view: "bot", id: bot.id }) }, icon("settings", 16)),
+        h("button", { class: "icon-btn desktop-only", title: "Hide (⌘⇧\\)", "aria-label": "Hide chat", onclick: () => toggleBotPane() }, icon("sidebarRight", 16))));
   };
 
   const renderBar = (): void => {
@@ -64,7 +63,10 @@ export function mountBot(pane: HTMLElement): void {
         title: "Conversations", onclick: () => store.set({ showThreads: !s.showThreads }),
       },
         icon(current ? originIcon(current) : "comment", 14),
-        h("span", { class: "conv-title" }, s.threadId === "new" || !current ? "New conversation" : current.title),
+        // Not a second "New" button: a quiet label until there is a conversation to show.
+        s.threadId === "new" || !current
+          ? h("span", { class: "conv-title placeholder" }, s.threads.length ? "New conversation" : "No conversations yet")
+          : h("span", { class: "conv-title" }, current.title),
         others ? h("span", { class: "count", title: `${others} other conversation${others === 1 ? "" : "s"} with new replies` }, String(others)) : null,
         h("span", { class: "conv-caret" }, icon("chevronDown", 13))),
       h("button", { class: "btn small", title: "New conversation", "aria-label": "New conversation", onclick: () => { newConversation(); focusComposer(); } },
@@ -74,7 +76,7 @@ export function mountBot(pane: HTMLElement): void {
   const renderBody = (): void => {
     const s = store.get();
     const bot = botById(s.botId);
-    if (!bot) { chatRefs = undefined; replace(body, h("div", { class: "thread" }, h("div", { class: "thread-empty" }, "Open a page to talk to its bot."))); return; }
+    if (!bot) { chatRefs = undefined; replace(body, h("div", { class: "thread" }, h("div", { class: "thread-empty" }, "Open a page to talk to its agent."))); return; }
     if (s.showThreads) { chatRefs = undefined; replace(body, threadList(bot)); return; }
     if (!chatRefs || chatRefs.botId !== bot.id || !chatRefs.thread.isConnected) replace(body, chatView(bot));
     else updateChat();
@@ -147,9 +149,7 @@ function threadList(bot: BotStatus): Node {
       ], { x: e.clientX - 140, y: e.clientY + 8 }),
     }, icon("more", 14))));
   return h("div", { class: "conv-list", role: "list" },
-    h("button", { class: "conv-row new", onclick: () => { newConversation(); focusComposer(); } },
-      icon("plus", 15), h("span", null, `New conversation with ${bot.name}`)),
-    rows.length ? rows : h("p", { class: "muted", style: { padding: "12px 16px" } }, "No conversations yet."));
+    rows.length ? rows : h("p", { class: "muted", style: { padding: "12px 16px" } }, `No conversations with ${bot.name} yet.`));
 }
 
 async function archive(bot: BotStatus, t: ThreadView): Promise<void> {
@@ -170,8 +170,21 @@ function chatView(bot: BotStatus): Node {
   const thread = h("div", { class: "thread", role: "log", "aria-live": "polite" });
   const live = h("div", { class: "live-line hidden" });
   const ctxChips = h("div", { class: "ctx-chips" });
-  const input = h("textarea", { rows: 1, placeholder: `Ask ${bot.name}… @ to mention a bot`, "aria-label": `Message ${bot.name}` }) as HTMLTextAreaElement;
-  const sendBtn = h("button", { class: "send-btn", "aria-label": "Send", disabled: true }, icon("send", 16)) as HTMLButtonElement;
+  const input = h("textarea", { rows: 1, placeholder: `Message ${bot.name}`, "aria-label": `Message ${bot.name}` }) as HTMLTextAreaElement;
+  const sendBtn = h("button", { class: "send-btn", title: "Send (Enter)", "aria-label": "Send", disabled: true }, icon("send", 15)) as HTMLButtonElement;
+  // @ is how a message reaches another agent too; the button makes that findable.
+  const mentionBtn = h("button", {
+    class: "mention-btn", type: "button", title: "Mention another agent (@)", "aria-label": "Mention another agent",
+    onclick: () => {
+      const pos = input.selectionStart ?? input.value.length;
+      const before = input.value.slice(0, pos);
+      const at = before && !/\s$/.test(before) ? " @" : "@";
+      input.value = before + at + input.value.slice(pos);
+      input.focus();
+      input.setSelectionRange(pos + at.length, pos + at.length);
+      input.dispatchEvent(new Event("input"));
+    },
+  }, icon("at", 16));
   const mentions = h("div", { class: "menu mention-list hidden", role: "listbox" });
   const grow = (): void => { input.style.height = "auto"; input.style.height = `${Math.min(180, input.scrollHeight)}px`; };
   const send = async (): Promise<void> => {
@@ -209,7 +222,8 @@ function chatView(bot: BotStatus): Node {
   });
   sendBtn.addEventListener("click", () => void send());
   const composer = h("div", { class: "composer", style: { position: "relative" } }, mentions, ctxChips,
-    h("div", { class: "composer-row" }, input, sendBtn));
+    h("div", { class: "composer-box" }, input, mentionBtn, sendBtn),
+    h("div", { class: "composer-hint" }, "Enter sends · Shift+Enter adds a line · @ brings in another agent"));
   chatRefs = { thread, ctxChips, input, live, botId: bot.id };
   updateChat();
   return h("div", { class: "bot-body" }, thread, live, composer);
@@ -241,19 +255,28 @@ function updateChat(): void {
   const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80;
   const conv = s.conversation && (s.conversation.thread.id === s.threadId || s.conversation.thread.id === "new") ? s.conversation : null;
   const items = conv?.messages ?? [];
-  input.placeholder = s.threadId === "new" || !conv ? `Start a new conversation with ${bot.name}… @ to mention` : `Message ${bot.name}… @ to mention a bot`;
+  if (input.placeholder !== `Message ${bot.name}`) input.placeholder = `Message ${bot.name}`;
   const intro: Node[] = [];
   if (conv?.thread.from_thread) {
     const from = conv.thread.from_thread;
     intro.push(h("div", { class: "card peer" },
-      h("div", { class: "card-head" }, icon("at", 14), h("span", null, "You mentioned this bot in another conversation")),
+      h("div", { class: "card-head" }, icon("at", 14), h("span", null, "You mentioned this agent in another conversation")),
       h("button", { class: "action-chip", style: { marginTop: "6px" }, onclick: () => void openFrom(from) }, icon("comment", 12), "Open that conversation")));
   }
+  const suggest = (text: string): void => {
+    input.value = text;
+    input.dispatchEvent(new Event("input"));
+    input.focus();
+    input.setSelectionRange(text.length, text.length);
+  };
   replace(thread, items.length
     ? [...intro, ...items.map((m, idx) => renderMessage(m, bot, items[idx - 1]))]
-    : h("div", { class: "thread-empty" }, avatar(bot, 40),
-      h("p", null, s.threads.length ? `New conversation with ${bot.name}.` : `${bot.name} hasn't said anything yet.`),
-      h("p", { class: "muted" }, bot.kind === "vault" ? "Ask about anything in the vault." : `It looks after ${bot.path}. Ask it to write or change a page, or mark a page and send notes.`)));
+    : h("div", { class: "thread-empty" }, avatar(bot, 44),
+      h("p", { class: "lead" }, s.threads.length ? `New conversation with ${bot.name}` : `${bot.name} hasn't said anything yet`),
+      h("p", null, bot.kind === "vault" ? "It looks after the whole vault. Ask about anything in it." : `It looks after ${bot.path}. Ask it to write or change a page, or mark a page and send notes.`),
+      // Starting points: they fill the box, they do not send.
+      h("div", { class: "suggestions" }, suggestionsFor(bot).map((text) =>
+        h("button", { class: "suggestion", onclick: () => suggest(text) }, icon("sparkle", 13), h("span", null, text))))));
   if (conv?.thread.state === "failed" && conv.thread.error) {
     thread.append(h("div", { class: "request-flag" }, icon("alert", 12), `The run failed: ${conv.thread.error}`));
   }
@@ -275,6 +298,12 @@ function updateChat(): void {
   }
   replace(ctxChips, chips);
   ctxChips.classList.toggle("hidden", chips.length === 0);
+}
+
+function suggestionsFor(bot: BotStatus): string[] {
+  if (bot.kind === "vault") return ["What changed in the vault this week?", "Sort out what is in the inbox", "Find my notes about "];
+  if (bot.kind === "page") return ["Summarize this page", "What is missing from this page?", "Tighten the writing on this page"];
+  return ["Where does this stand?", "What should happen next here?", "Bring the front page up to date"];
 }
 
 async function openFrom(threadId: string): Promise<void> {
@@ -311,10 +340,11 @@ function renderMessage(m: Message, bot: BotStatus, prev?: Message): Node {
         h("button", { class: "action-chip", style: { marginTop: "6px" }, onclick: () => go({ view: "page", path }) }, icon("file", 12), "Open page"),
         time);
     }
-    return h("div", { class: ["msg mine", m.pending && "pending"] }, h("div", null,
+    return h("div", { class: ["msg mine", m.pending && "pending"] }, h("div", { class: "mine-col" },
       h("div", { class: "bubble" }, m.text),
-      m.context ? h("div", { class: "ctx", style: { justifyContent: "flex-end" }, title: m.context }, icon("file", 11), contextLabel(m.context)) : null,
-      h("div", { class: "meta", style: { textAlign: "right" } }, m.pending ? "Sending…" : clock(m.at))));
+      h("div", { class: "mine-meta" },
+        m.context ? h("span", { class: "ctx", title: m.context }, icon("file", 11), contextLabel(m.context)) : null,
+        h("span", { class: "meta" }, m.pending ? "Sending…" : clock(m.at)))));
   }
   const showAvatar = !prev || prev.role !== "bot";
   return h("div", { class: "msg" },
@@ -344,7 +374,7 @@ export function memoryView(bot: BotStatus): Node {
             `${bot.name} has not written anything down yet. Say "remember …" in a conversation, or add it here.`)),
           h("div", { style: { display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" } },
             h("button", { class: "btn small", onclick: edit }, icon("edit", 13), "Edit"),
-            h("span", { class: "hint" }, `Kept in ${r.path || ".bot/MEMORY.md"}; the bot reads it at the start of every conversation.`)));
+            h("span", { class: "hint" }, `Kept in ${r.path || ".bot/MEMORY.md"}; the agent reads it at the start of every conversation.`)));
       };
       const edit = (): void => {
         const area = h("textarea", { rows: 10, "aria-label": "Memory" }) as HTMLTextAreaElement;
@@ -412,8 +442,8 @@ function triggersBody(bot: BotStatus, d: BotDetail, save: (t: Trigger[]) => Prom
     const at = h("input", { type: "time", value: "08:00", "aria-label": "Time" }) as HTMLInputElement;
     const n = h("input", { type: "number", min: "1", max: "1440", value: "2", "aria-label": "Interval" }) as HTMLInputElement;
     const day = h("select", { "aria-label": "Day" }, ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map((x) => h("option", { value: x }, x))) as HTMLSelectElement;
-    const path = h("input", { placeholder: "folder inside this bot's folder (empty = all)", "aria-label": "Folder" }) as HTMLInputElement;
-    const prompt = h("textarea", { rows: 2, placeholder: "What should the bot do? e.g. Prepare today's brief in Brief.md" }) as HTMLTextAreaElement;
+    const path = h("input", { placeholder: "folder inside this agent's folder (empty = all)", "aria-label": "Folder" }) as HTMLInputElement;
+    const prompt = h("textarea", { rows: 2, placeholder: "What should the agent do? For example: prepare today's brief in Brief.md" }) as HTMLTextAreaElement;
     const heartbeat = h("input", { type: "checkbox", "aria-label": "Heartbeat" }) as HTMLInputElement;
     const sync = (): void => {
       const v = every.value;
@@ -436,7 +466,7 @@ function triggersBody(bot: BotStatus, d: BotDetail, save: (t: Trigger[]) => Prom
         h("button", { class: "btn", onclick: () => form.classList.add("hidden") }, "Cancel"),
         h("button", {
           class: "btn primary", onclick: () => {
-            if (!prompt.value.trim()) { toast("Say what the bot should do", { error: true }); return; }
+            if (!prompt.value.trim()) { toast("Say what the agent should do", { error: true }); return; }
             const id = `t${Date.now().toString(36)}`;
             const t: Trigger = every.value === "file_change"
               ? { id, kind: "file_change", path: path.value.trim(), prompt: prompt.value.trim(), enabled: true }
@@ -455,7 +485,7 @@ function triggersBody(bot: BotStatus, d: BotDetail, save: (t: Trigger[]) => Prom
     prompt.focus();
   };
   return h("div", null,
-    h("p", { class: "tab-intro" }, "When this bot gets to work without you. Each trigger keeps one conversation, so its runs are in one place. Triggers start switched off."),
+    h("p", { class: "tab-intro" }, "When this agent gets to work without you. Each trigger keeps one conversation, so its runs are in one place. Triggers start switched off."),
     triggers.length ? triggers.map((t, idx) => h("div", { class: "trigger-row" },
       icon(t.kind === "file_change" ? "folder" : "clock", 18),
       h("div", { class: "what" },
@@ -515,7 +545,7 @@ function setupBody(bot: BotStatus, d: BotDetail, models: ModelChoice[]): HTMLEle
         h("button", { class: "btn small primary", onclick: async () => { def.instructions = area.value; editing = false; renderInstr(); await patch({ instructions: area.value }, "Instructions saved"); } }, "Save")));
       area.focus();
     } else {
-      replace(instr, h("div", { class: "instructions-view" }, def.instructions?.trim() ? md(def.instructions) : h("span", { class: "muted" }, "No instructions yet. The bot follows its folder's purpose.")),
+      replace(instr, h("div", { class: "instructions-view" }, def.instructions?.trim() ? md(def.instructions) : h("span", { class: "muted" }, "No instructions yet. The agent follows its folder's purpose.")),
         h("button", { class: "btn small", style: { marginTop: "6px" }, onclick: () => { editing = true; renderInstr(); } }, icon("edit", 13), "Edit"));
     }
   };
@@ -524,7 +554,7 @@ function setupBody(bot: BotStatus, d: BotDetail, models: ModelChoice[]): HTMLEle
   // Model: the providers and models the bots' T3 reports, with each model's effort levels.
   const vaultDefault = store.get().defaultModel;
   const provider = h("select", { "aria-label": "Provider" },
-    h("option", { value: "" }, `Vault default (${PROVIDER_LABEL[vaultDefault?.provider ?? "claude"] ?? vaultDefault?.provider ?? "Claude"})`),
+    h("option", { value: "" }, `Vault default: ${PROVIDER_LABEL[vaultDefault?.provider ?? "claude"] ?? vaultDefault?.provider ?? "Claude"}`),
     ["claude", "codex"].map((v) => h("option", { value: v }, PROVIDER_LABEL[v]))) as HTMLSelectElement;
   provider.value = def.model?.provider ?? "";
   const model = h("select", { "aria-label": "Model" }) as HTMLSelectElement;
@@ -558,23 +588,23 @@ function setupBody(bot: BotStatus, d: BotDetail, models: ModelChoice[]): HTMLEle
   scope.addEventListener("change", () => void patch({ write_scope: scope.value }));
   return h("div", null,
     def.needs_review ? h("div", { class: "card", style: { marginBottom: "14px" } },
-      h("div", { class: "card-head" }, icon("alert", 14), "This bot's definition changed outside Peers, or arrived with automation"),
+      h("div", { class: "card-head" }, icon("alert", 14), "This agent's definition changed outside Peers, or arrived with automation"),
       h("div", { class: "card-body" }, "Check its triggers and write scope, then confirm to switch them on."),
       h("button", { class: "btn small primary", style: { marginTop: "8px" }, onclick: () => void patch({ needs_review: false }, "Confirmed") }, "Confirm")) : null,
     h("div", { class: "field" }, h("label", null, "Name"), name,
-      h("span", { class: "hint" }, "Write @ and this name in any chat to send that message to this bot too.")),
+      h("span", { class: "hint" }, "Write @ and this name in any chat to send that message to this agent too.")),
     h("div", { class: "field" }, h("span", { class: "label" }, "Colour"),
       h("div", { class: "colors" }, Object.keys(COLOR_VAR).map((c) => h("button", {
         class: (def.color ?? "teal") === c ? "on" : undefined, style: { "--bot-color": COLOR_VAR[c] }, "aria-label": c,
         onclick: () => void patch({ color: c }),
       })))),
     h("div", { class: "field" }, h("span", { class: "label" }, "Instructions"), instr,
-      h("span", { class: "hint" }, "Given to the bot at the start of every conversation.")),
+      h("span", { class: "hint" }, "Given to the agent at the start of every conversation.")),
     h("div", { class: "field" }, h("label", null, "Model"), provider,
       h("div", { class: "field-row" }, model, thinking),
-      h("span", { class: "hint" }, "Runs on the bots' own Claude Code or Codex sign-in, through Peers' built-in T3. New conversations use the new choice.")),
+      h("span", { class: "hint" }, "Runs on the agents' own Claude Code or Codex sign-in, through Peers' built-in T3. New conversations use the new choice.")),
     h("div", { class: "field" }, h("label", null, "Can write"), scope,
-      h("span", { class: "hint" }, "The bot is told to stay inside these folders. Changes it makes elsewhere are flagged on Today.")),
+      h("span", { class: "hint" }, "The agent is told to stay inside these folders. Changes it makes elsewhere are flagged on Today.")),
     h("div", { class: "field" },
       h("button", { class: "btn", onclick: () => void patch({ paused: !def.paused }, def.paused ? "Resumed" : "Paused") },
         icon(def.paused ? "play" : "pause", 14), def.paused ? "Resume triggers" : "Pause triggers")),
@@ -586,7 +616,7 @@ function setupBody(bot: BotStatus, d: BotDetail, models: ModelChoice[]): HTMLEle
     h("button", {
       class: "btn small", style: { marginTop: "6px" },
       onclick: (e: MouseEvent) => openMenu([
-        { label: "Copy bot id", icon: "link", run: () => { void navigator.clipboard?.writeText(bot.id); toast("Copied"); } },
+        { label: "Copy agent id", icon: "link", run: () => { void navigator.clipboard?.writeText(bot.id); toast("Copied"); } },
       ], { x: e.clientX, y: e.clientY }),
     }, icon("more", 13), "More"));
 }

@@ -59,7 +59,7 @@ export type TreeNode = {
   name: string;
   path: string;
   type: "dir" | "file";
-  kind?: "page" | "image" | "svg" | "pdf" | "text" | "other";
+  kind?: "page" | "image" | "svg" | "pdf" | "text" | "app" | "other";
   size?: number;
   mtime?: number;
   root?: "inbox" | "projects" | "areas" | "resources" | "archive";
@@ -81,6 +81,34 @@ export type PageData = {
   content?: string;
   /** How the page differs from what you last saw; absent when you have seen it as it is. */
   change?: { created: boolean; author: string; author_name: string; at: string; hunks: Hunk[]; outside_scope: boolean };
+};
+
+/** An app opened for this device (ADR 0006): where its frame loads, and what it asks for. */
+export type AppOpen = {
+  url: string;
+  owner: string;
+  app: {
+    name: string;
+    root: string;
+    entry: string;
+    manifest: boolean;
+    description?: string;
+    reads: string[];
+    /** Origins it may reach now. */
+    network: string[];
+    /** Origins it asks for that the owner has not allowed. */
+    asks: string[];
+    /** Its server (ADR 0007): whether it is allowed or asked for, and its state. */
+    server?: AppServerInfo;
+  };
+};
+
+export type AppServerInfo = {
+  file: string;
+  allowed: boolean;
+  asks: boolean;
+  state: "stopped" | "starting" | "running" | "crashed" | "unavailable";
+  message?: string;
 };
 
 export type Quote = { exact: string; prefix?: string; suffix?: string };

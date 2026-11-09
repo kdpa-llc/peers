@@ -158,7 +158,7 @@ export class T3Engine implements BotEngine {
   }
 
   private get c(): T3Client {
-    if (!this.client) throw new Error("the bot engine is not running");
+    if (!this.client) throw new Error("the agent engine is not running");
     return this.client;
   }
 
@@ -431,7 +431,7 @@ export class DemoEngine implements BotEngine {
       answer = `Noted. I will remember: "${remember.trim()}".`;
     } else {
       const body = text.replace(/\[\[peers:(brief|context)\]\][\s\S]*?\[\[\/peers:\1\]\]/g, "").trim();
-      answer = `Demo mode: I'm a scripted bot, so I can't reason about "${body.slice(0, 120)}" yet. ` +
+      answer = `Demo mode: I'm a scripted agent, so I can't reason about "${body.slice(0, 120)}" yet. ` +
         "Start Peers with T3 and a signed-in Claude or Codex and I'll answer for real. Marks and notes on pages still show the full flow.";
     }
     const at = this.now();

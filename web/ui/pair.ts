@@ -36,7 +36,7 @@ export function showPairing(onPaired: () => void): void {
   const screen = h("div", { class: "pair-screen" }, h("div", { class: "pair-card" },
     h("div", { class: "brand-mark" }, icon("layers", 24)),
     h("h1", null, "Pair this device"),
-    h("p", null, "On the computer running Peers, run `peers pair` (or open Settings on a paired device) and type the 6-character code."),
+    h("p", null, "On the computer running Peers, run ", h("code", null, "peers pair"), ", or open Settings on a device that is already paired. Then type the 6-character code here."),
     form));
   document.body.append(screen);
   input.focus();

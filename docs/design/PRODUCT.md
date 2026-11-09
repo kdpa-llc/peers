@@ -41,8 +41,8 @@ phone, and installs as a desktop app.
 | Agent home | A folder or a single page that has its own agent. The vault's layout says which (ADR 0005). |
 | Layout | `.peers/layout.json`: which folders and pages have agents, what is paused, generated or hidden. PARA is a preset. |
 | Front page | A folder's `index`, `README`, `main` or `Overview` page, or its folder note. Opening the folder shows it. |
-| Bot | The agent that owns a container. Shown with an avatar and the container's name. |
-| Vault bot | One extra bot that owns the vault root and `Inbox`. Your general assistant. |
+| Agent | What owns a folder or a page and talks with you. Shown with an avatar and its name. Code and older documents call it a bot. |
+| Vault agent | One extra agent that owns the vault root and `Inbox`. Your general assistant. |
 | Page | A file shown in the middle pane: markdown, image or PDF. |
 | Note | One mark on a page plus your instruction. Queued notes are sent in a batch. |
 | Conversation | One chat with a bot. A bot has as many as you like; notes and triggers start their own. |
@@ -164,6 +164,14 @@ edits the image or PDF itself.
 
 **Empty page**: a new page has only a title. The body shows "Tell Website Relaunch what this
 page is for" with a text field. Submitting sends a chat message with the page attached.
+
+**Apps.** An `.html` page, or a folder with `peers.app.json`, opens as an app filling the
+pane: a dashboard, a chart, a small tool an agent built. A thin bar above it gives its name,
+what it reads (`Reads its folder and 1 more`), and `Offline` or the sites it may reach. When
+its manifest asks for a site you have not allowed, the bar says so with **Allow**. The app
+can open a vault page, or propose a message to its folder's agent, which you confirm. An app
+that stores data has a server: the bar asks to run it ("in a sandbox, with internet access"),
+then shows `Server running`, and a tap shows its output with Restart and Stop.
 
 ### 4.3 Right: the bot
 
@@ -372,14 +380,15 @@ Day, Night and System (default). Both themes use the same structure; only tokens
 | `--panel` (tree, bot) | `#F3F1EC` | `#151A20` |
 | `--surface` (cards, popovers) | `#FFFFFF` | `#1B2129` |
 | `--text` | `#1F2328` | `#E6E8EB` |
-| `--muted` | `#6B6F76` | `#9AA1AA` |
+| `--muted` | `#666A71` | `#9AA1AA` |
 | `--line` (hairlines) | `#E4E1DA` | `#262D36` |
 | `--accent` (teal) | `#0E7C7B` | `#3FB8B4` |
-| `--attention` (amber) | `#B7791F` | `#E8A33D` |
+| `--attention` (amber) | `#93601A` | `#E8A33D` |
 | `--danger` | `#C2412D` | `#F07A5F` |
 | `--ink` (default pen) | `#0E7C7B` | `#5ED1CC` |
 
-Contrast: body text on `--bg` is at least 12:1 in both themes; muted text at least 4.5:1.
+Contrast: body text on `--bg` is at least 12:1 in both themes; muted and amber text at least 4.5:1 on the
+background and the panels. `--faint` is for icons, separators and other marks that are not text.
 
 ### 10.2 Type
 System fonts only, so nothing downloads: `-apple-system, "SF Pro Text", system-ui` for UI;

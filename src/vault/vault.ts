@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { extname, rootKindOf, visibleName, type RootKind } from "./paths.ts";
 
 export type Roots = Partial<Record<RootKind, string>>;
-export type FileKind = "page" | "image" | "svg" | "pdf" | "text" | "other";
+export type FileKind = "page" | "image" | "svg" | "pdf" | "text" | "app" | "other";
 
 export type TreeNode = {
   name: string;
@@ -30,6 +30,7 @@ export function kindOf(rel: string): FileKind {
   if ([".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(ext)) return "image";
   if (ext === ".svg") return "svg";
   if (ext === ".pdf") return "pdf";
+  if (ext === ".html" || ext === ".htm") return "app";
   if ([".txt", ".csv", ".json"].includes(ext)) return "text";
   return "other";
 }

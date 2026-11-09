@@ -1,0 +1,5 @@
+{
+  "name": "Projects board",
+  "description": "Every project with its open tasks and what is due next.",
+  "reads": ["Projects/**"]
+}

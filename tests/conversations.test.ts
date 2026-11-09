@@ -23,7 +23,7 @@ test("each message without a conversation starts a new one; replies land in the 
     const raw = await fx.engine.messages(a.thread_id);
     assert.match(raw[0]!.text, /^\[\[peers:brief\]\]/, "the first message carries the brief");
     assert.doesNotMatch(raw[2]!.text, /peers:brief/, "later messages do not");
-    await assert.rejects(fx.app.send({ botId: botFor(fx.app, "Projects/Beta"), threadId: a.thread_id, text: "x" }), /another bot/);
+    await assert.rejects(fx.app.send({ botId: botFor(fx.app, "Projects/Beta"), threadId: a.thread_id, text: "x" }), /another agent/);
   } finally {
     await fx.close();
   }

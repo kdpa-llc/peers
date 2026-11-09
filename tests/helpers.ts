@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { VaultApp } from "../src/vault/app.ts";
 import { DemoEngine } from "../src/vault/engine.ts";
 import { ManualWatcher } from "../src/vault/watch.ts";
+import type { SandboxMode } from "../src/vault/appserver.ts";
 
 /** A clock that stands still until a test moves it. */
 export function fixedClock(startIso: string): { now(): Date; advance(ms: number): void } {
@@ -44,7 +45,7 @@ export function writeFiles(root: string, files: Record<string, string>): void {
   }
 }
 
-export async function makeVault(opts: { files?: Record<string, string>; start?: string } = {}): Promise<Fixture> {
+export async function makeVault(opts: { files?: Record<string, string>; start?: string; appSandbox?: SandboxMode } = {}): Promise<Fixture> {
   const dir = mkdtempSync(join(tmpdir(), "peers-vault-test-"));
   const root = join(dir, "vault");
   const state = join(dir, "state");
@@ -52,7 +53,8 @@ export async function makeVault(opts: { files?: Record<string, string>; start?: 
   const clock = fixedClock(opts.start ?? "2026-11-06T10:00:00.000Z");
   const watcher = new ManualWatcher();
   const engine = new DemoEngine({ vaultRoot: root, delayMs: 0, now: () => clock.now() });
-  const app = await VaultApp.open({ root, stateDir: state, clock, engine, watcher });
+  // App servers never start in tests unless a test asks for them (ADR 0007).
+  const app = await VaultApp.open({ root, stateDir: state, clock, engine, watcher, appSandbox: opts.appSandbox ?? "none" });
   app.startWatching();
   return {
     app, engine, root, state, watcher, clock,

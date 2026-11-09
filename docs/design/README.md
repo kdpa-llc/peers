@@ -7,13 +7,16 @@ writes its pages and takes instructions from your marks and messages.
 | --- | --- |
 | [PRODUCT.md](PRODUCT.md) | Product and UX: layout, tools, agents, flows, look, phone, desktop app |
 | [TECHNICAL.md](TECHNICAL.md) | Architecture, data, API, security, tests |
+| [MOTION.md](MOTION.md) | What moves, how long, on which curve, and what it must never do |
 | [BENCHMARK.md](BENCHMARK.md) | What we take from Obsidian, OpenClaw, ChatGPT Canvas, tldraw, Codex, Notion, Linear and others |
 
 Decisions: [ADR 0001](../adr/0001-a-notes-vault-with-agents.md) (the product),
 [0002](../adr/0002-plain-module-web-client.md) (plain module client, own parsers),
 [0003](../adr/0003-agents-on-embedded-t3.md) (agents on an embedded T3),
 [0004](../adr/0004-backend-in-a-container.md) (one container),
-[0005](../adr/0005-folder-agents-and-layouts.md) (any folder or page can have an agent).
+[0005](../adr/0005-folder-agents-and-layouts.md) (any folder or page can have an agent),
+[0006](../adr/0006-app-pages-in-a-sandbox.md) (apps in a sandboxed frame),
+[0007](../adr/0007-app-servers-in-bubblewrap.md) (app servers in bubblewrap).
 
 ## Screenshots
 
@@ -38,6 +41,10 @@ From the browser journey (`npm run test:e2e`): the demo vault with the demo engi
 | A PDF region note | Reading view |
 | --- | --- |
 | ![PDF](screenshots/desktop-pdf-night.jpg) | ![Page](screenshots/desktop-page-day.jpg) |
+
+| An app reading the vault, in its sandbox | An app with a server, allowed by the owner |
+| --- | --- |
+| ![Projects board](screenshots/desktop-app-night.jpg) | ![Expense log](screenshots/desktop-app-server-night.jpg) |
 
 | Phone: page and agent sheet | Phone: note | Phone: agent |
 | --- | --- | --- |

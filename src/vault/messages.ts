@@ -25,6 +25,8 @@ export type BriefArgs = {
   readonly?: string[];
   /** Where every agent's conversations are saved as text, for agents to read each other's. */
   conversationsDir?: string;
+  /** Where app servers' output is logged (ADR 0007). */
+  appLogsDir?: string;
 };
 
 export function brief(a: BriefArgs): string {
@@ -50,7 +52,21 @@ export function brief(a: BriefArgs): string {
     "How to work:",
     "- Pages are Markdown (.md, Obsidian style: [[wikilinks]], front matter, #tags) or Org (.org:",
     "  headings, TODO keywords, property drawers, [[file:…][links]]). Keep each file's format and",
-    "  conventions; new pages follow the format around them. Never write raw HTML.",
+    "  conventions; new pages follow the format around them. Never put raw HTML in a page.",
+    "- When the owner asks for a dashboard, a chart or a small tool, build an app: a folder with",
+    "  peers.app.json ({\"name\": …, \"reads\": [vault path patterns it reads], \"network\": [https",
+    "  origins, only if needed]}) and index.html. Peers shows it in a sandbox: no internet until the",
+    "  owner allows the listed origins, so keep libraries as files in the folder. Load",
+    "  <script src=\"_peers/peers.js\"></script> for peers.text(path), peers.json(path),",
+    "  peers.list(folder, {recursive}), peers.page(path) (parsed Markdown or Org), peers.tasks(path)",
+    "  (tasks with deadlines), peers.onChange(fn), peers.open(path) and peers.ask(text). Paths are",
+    "  vault paths. The page alone cannot change the vault; it asks you through peers.ask.",
+    "- When an app needs to store data or run code, add \"server\": \"server.py\" (or .ts, .js) to",
+    "  peers.app.json: an HTTP server on $PORT, standard library or files in the folder only. Once the",
+    "  owner allows it, Peers runs it in a sandbox where it sees its folder read-only, can write only in",
+    "  $PEERS_DATA (the app's data/ folder), and reads the vault through $PEERS_API (the same file, list,",
+    "  page and tasks endpoints). Pages call it with peers.call(path, data) or peers.api(path, init),",
+    `  under _api/.${a.appLogsDir ? ` Its output is logged in ${a.appLogsDir}/<app folder, / as -->.log.` : ""}`,
     `- Your memory is ${a.memoryPath}. Read it at the start of a conversation.`,
     "  When you learn a lasting fact or preference, add one short line to it.",
   );

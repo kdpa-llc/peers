@@ -44,7 +44,8 @@ const port = 4800 + Math.floor(Math.random() * 400);
 const cli = ["--experimental-strip-types", "--no-warnings", join(ROOT, "src", "cli", "main.ts"), "serve"];
 const server = spawn(process.execPath, [...cli, vault, "--scripted", "--port", String(port), "--state-dir", state], {
   // A fixed owner name, so screenshots never carry the name of whoever runs the journey.
-  cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, USER: "sam" },
+  // App servers run unsandboxed here: bubblewrap exists only in the container (ADR 0007).
+  cwd: ROOT, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, USER: "sam", PEERS_APP_SANDBOX: "off" },
 });
 let log = "";
 server.stdout.on("data", (d) => { log += d; });
@@ -122,7 +123,20 @@ async function drawEllipse(page, r) {
   await page.mouse.up();
 }
 
+/** Wait (up to 3 s) until running, finite animations have finished: screenshots show settled frames. */
+async function settled(p) {
+  const stuck = await p.evaluate(async () => {
+    const running = () => document.getAnimations().filter((a) => a.playState === "running" && a.effect?.getComputedTiming().iterations !== Infinity);
+    const all = running();
+    const timeout = new Promise((done) => setTimeout(() => done(false), 3000));
+    const ok = await Promise.race([Promise.all(all.map((a) => a.finished.catch(() => {}))).then(() => true), timeout]);
+    return ok ? null : running().map((a) => `${a.animationName || a.transitionProperty} on .${String(a.effect?.target?.className ?? "?").split(" ").join(".")}`);
+  });
+  if (stuck?.length) console.log(`    (still animating after 3 s: ${stuck.join("; ")})`);
+}
+
 const errors = [];
+let probing = false;
 function watch(page, label) {
   page.on("pageerror", (e) => errors.push(`${label} pageerror: ${e.message}`));
   page.on("console", (m) => {
@@ -133,6 +147,8 @@ function watch(page, label) {
     // Playwright's WebKit screenshots inject a <style>; the app's strict CSP refuses it.
     // Verified separately: the app logs nothing until a screenshot is taken.
     if (label === "phone" && /Refused to apply a stylesheet/.test(text)) return;
+    // The app step probes the sandbox on purpose: what it refuses is the point.
+    if (probing) return;
     errors.push(`${label} console: ${text}`);
   });
 }
@@ -151,6 +167,8 @@ try {
     await page.waitForSelector(".today h1");
     ok((await page.locator(".bot-tile").count()) >= 8, "expected a tile per bot");
     ok(!(await page.url()).includes("pair="), "pairing token stays out of the URL");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-today-day.png") });
   });
 
@@ -160,6 +178,8 @@ try {
     await page.waitForFunction(() => document.querySelector(".page-title")?.textContent === "Launch plan");
     await page.waitForSelector(".page-body .md-block");
     await page.waitForFunction(() => document.querySelector(".bot-id .name")?.textContent?.includes("Website Relaunch"));
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-page-day.png") });
   });
 
@@ -179,8 +199,12 @@ try {
     await page.waitForSelector(".pin.applied, .pin.done", { timeout: 10000 });
     await page.waitForSelector(".msg .bot-text >> text=Done (demo mode)", { timeout: 10000 });
     const chip = await page.locator(".change-chip").textContent();
-    ok(/since you last looked · by Website Relaunch/.test(chip), `the chip says who changed it (${chip})`);
+    ok(/since you last looked/.test(chip), `the chip says it changed (${chip})`);
+    const byline = await page.locator(".page-meta").textContent();
+    ok(/Website Relaunch/.test(byline), `the line above says who changed it (${byline})`);
     ok(!(await page.locator(".change-chip button", { hasText: "Undo" }).count()), "no Undo");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-changed-day.png") });
   });
 
@@ -203,6 +227,8 @@ try {
     await page.waitForSelector(".popover textarea", { timeout: 5000 });
     const target = await page.locator(".popover .target").textContent();
     ok(/Line/.test(target), `popover shows the resolved target (${target})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-marking-day.png") });
     await page.fill(".popover textarea", "turn into a table with owners");
     await page.keyboard.press("Enter");
@@ -226,6 +252,8 @@ try {
     await page.locator(".popover button", { hasText: "Add to batch" }).click();
     const label = await page.locator(".tool-pill .send").textContent();
     ok(/Send 2/.test(label), `pill shows two queued notes (${label})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-batch-day.png") });
     await page.locator(".tool-pill .send").click();
     await page.waitForFunction(() => !document.body.innerText.includes("Redirect old blog URLs"), null, { timeout: 15000 });
@@ -237,8 +265,10 @@ try {
     await page.waitForSelector(".conv-list .conv-open");
     const n = await page.locator(".conv-list .conv-open").count();
     ok(n >= 3, `each notes send is its own conversation (${n})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-conversations-day.png") });
-    await page.locator(".conv-row.new").click();
+    await page.locator(".conv-bar .btn", { hasText: "New" }).click();
     await page.waitForSelector(".composer textarea");
     await page.fill(".composer textarea", "@Finances can we afford a launch party?");
     await page.keyboard.press("Enter");
@@ -252,6 +282,8 @@ try {
     const ctx = await page.locator(".msg.mine .ctx").first().textContent();
     ok(/from Website Relaunch/.test(ctx), `the mention says where it came from (${ctx})`);
     await page.waitForSelector(".thread .card.peer >> text=Open that conversation");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-mention-day.png") });
   });
 
@@ -260,10 +292,12 @@ try {
     await page.keyboard.press("Enter");
     await page.waitForSelector(".msg .bot-text >> text=I will remember", { timeout: 15000 });
     ok(!(await page.locator(".bot-pane .tabs").count()), "the bot pane is chat only");
-    await page.locator(".bot-head [aria-label='Bot settings']").click();
+    await page.locator(".bot-head [aria-label='Agent settings']").click();
     await page.waitForSelector(".bot-settings #bot-memory >> text=summaries under five bullets");
     ok(await page.locator(".bot-settings #bot-triggers").count(), "triggers are on the settings page");
     ok(await page.locator(".bot-settings #bot-setup").count(), "instructions and model are on the settings page");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-bot-settings-day.png") });
   });
 
@@ -279,7 +313,9 @@ try {
     await page.waitForSelector(".page-body table >> text=Tomatoes, basil");
     await page.waitForFunction(() => document.querySelector(".bot-id .name")?.textContent?.includes("Garden beds"));
     const status = await page.locator(".bot-id .status").textContent();
-    ok(/Page agent/.test(status), `a single page can have its own agent (${status})`);
+    ok(/Garden beds\.org/.test(status), `a single page can have its own agent (${status})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-org-day.png") });
   });
 
@@ -305,12 +341,16 @@ try {
     ok(await page.evaluate(() => document.documentElement.dataset.theme === "night"), "night tokens applied");
     await page.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Projects/Website Relaunch/Launch plan.md")}`);
     await page.waitForSelector(".page-body .md-block");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-page-night.png") });
     await page.keyboard.press("p");
     const r = await blockRect(page, "Launch the new website");
     await drawEllipse(page, r);
     await page.waitForSelector(".popover textarea");
     await page.fill(".popover textarea", "shorten this");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-marking-night.png") });
     await page.keyboard.press("Escape");
   });
@@ -330,6 +370,8 @@ try {
     await page.fill(".popover textarea", "Extract to notes");
     await page.keyboard.press("Enter");
     await page.waitForSelector(".pin.answered, .pin.applied, .pin.done", { timeout: 15000 });
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-pdf-night.png") });
   });
 
@@ -350,8 +392,98 @@ try {
     await page.waitForSelector(".today h2 >> text=Changed since you looked");
     await page.waitForSelector(".row-card >> text=Birthdays", { timeout: 10000 });
     const by = await page.locator(".row-card", { hasText: "Birthdays" }).textContent();
-    ok(/by outside Peers/.test(by), `credited to outside Peers (${by})`);
+    ok(/outside Peers/.test(by), `credited to outside Peers (${by})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-today-night.png") });
+  });
+
+  await stage("an app: the projects board reads the vault in a sandbox and cannot act as you", async () => {
+    await page.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Dashboards/Projects board/index.html")}`);
+    await page.waitForSelector(".app-view .app-frame");
+    const board = page.frameLocator(".app-frame");
+    await board.locator(".card").first().waitFor({ timeout: 10000 });
+    const cards = await board.locator(".card").count();
+    ok(cards === 4, `a card per project (${cards})`);
+    ok(await board.locator(".card li", { hasText: "Order soil" }).count() === 1, "the Org project's NEXT task is on the board");
+    ok(await page.locator(".app-chip.offline").count() === 1, "offline until the owner allows more");
+    ok(await page.locator(".tool-pill:not(.hidden)").count() === 0, "no pen tools on an app");
+    const frame = page.frames().find((f) => f.url().includes("/apps/"));
+    ok(frame, "the app frame");
+    probing = true;
+    const probe = await frame.evaluate(async () => {
+      const out = {};
+      try { out.cookie = document.cookie; } catch { out.cookie = "blocked"; }
+      try { out.storage = localStorage.length; } catch { out.storage = "blocked"; }
+      try { out.parent = parent.document.title; } catch { out.parent = "blocked"; }
+      try { out.api = (await fetch("/api/state")).status; } catch { out.api = "blocked"; }
+      try { out.internet = (await fetch("https://example.com/")).status; } catch { out.internet = "blocked"; }
+      out.theme = document.documentElement.dataset.theme;
+      return out;
+    });
+    await page.waitForTimeout(200);
+    probing = false;
+    ok(probe.cookie === "blocked" && probe.storage === "blocked" && probe.parent === "blocked", `an opaque origin (${JSON.stringify(probe)})`);
+    ok(probe.api === "blocked" && probe.internet === "blocked", `no API and no internet (${JSON.stringify(probe)})`);
+    ok(probe.theme === "night", `the app follows Peers' theme (${probe.theme})`);
+    await settled(page);
+
+    await page.screenshot({ path: join(SHOTS, "desktop-app-night.png") });
+    // Asking the agent goes through you.
+    await board.locator(".card .ask").first().click();
+    await page.waitForSelector(".modal >> text=Send this to");
+    await page.locator(".modal .actions button.primary").click();
+    await page.waitForSelector(".bot-pane >> text=What should happen next", { timeout: 10000 });
+    // A card opens its project in Peers.
+    await board.locator(".card h2 a").first().click();
+    await page.waitForFunction(() => decodeURI(location.hash).includes("/p/Projects/"));
+    await page.waitForSelector(".page-body .md-block, .page-body .org-drawer, .page-body h2");
+  });
+
+  await stage("an app with a server: allow it, add an expense, find it in the vault", async () => {
+    // Until it is allowed, the app's calls to its server are refused: that is the point.
+    probing = true;
+    await page.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Areas/Finances/Expense log/index.html")}`);
+    await page.waitForSelector(".app-ask >> text=run its server");
+    const log = page.frameLocator(".app-frame");
+    await log.locator("#status").waitFor({ state: "attached" });
+    await page.locator(".app-ask button", { hasText: "Allow" }).click();
+    await page.waitForSelector(".app-ask.hidden", { state: "attached" });
+    await page.waitForTimeout(300);
+    probing = false;
+    await log.locator("#totals", { hasText: "Nothing logged yet" }).waitFor({ timeout: 15000 });
+    await log.locator("input[name=amount]").fill("42.50");
+    await log.locator("input[name=category]").fill("groceries");
+    await log.locator("input[name=note]").fill("market");
+    await log.locator("button[type=submit]").click();
+    await log.locator("#rows td", { hasText: "groceries" }).waitFor({ timeout: 10000 });
+    const csv = readFileSync(join(vault, "Areas/Finances/Expense log/data/expenses.csv"), "utf8");
+    ok(/groceries/.test(csv) && /42\.50/.test(csv), `saved in the app's data folder (${csv.trim()})`);
+    await page.waitForSelector(".app-chip.server.running");
+    await settled(page);
+
+    await page.screenshot({ path: join(SHOTS, "desktop-app-server-night.png") });
+    await page.locator(".app-chip.server").click();
+    await page.waitForSelector(".modal .app-log >> text=expense log on port");
+    await page.locator(".modal .actions button", { hasText: "Close" }).click();
+  });
+
+  await stage("tablet: the page sits next to the chat, and the tree opens over it", async () => {
+    const tab = await desktop.newPage();
+    watch(tab, "tablet");
+    await tab.setViewportSize({ width: 1024, height: 768 });
+    await tab.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Projects/Website Relaunch/Launch plan.md")}`);
+    await tab.waitForSelector(".page-body .md-block");
+    const width = await tab.evaluate(() => document.querySelector(".page-pane").getBoundingClientRect().width);
+    ok(width > 500, `the page has room next to the chat (${Math.round(width)} px)`);
+    await tab.locator(".tree-toggle-inline").click();
+    await tab.waitForSelector(".app.tree-open .tree-pane .tree-row");
+    await tab.locator(".tree-pane .tree-row", { hasText: "Decisions" }).click();
+    await tab.waitForFunction(() => decodeURI(location.hash).endsWith("Decisions.md"));
+    await tab.waitForSelector(".app.tree-open", { state: "detached", timeout: 3000 }).catch(() => ok(false, "opening a page closes the tree"));
+    await settled(tab);
+    await tab.screenshot({ path: join(SHOTS, "tablet-page.png") });
+    await tab.close();
   });
 
   await stage("API refuses requests without a session or the CSRF header", async () => {
@@ -379,7 +511,7 @@ try {
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1",
   });
   const mobile = await phone.newPage();
-  const shot = (name) => mobile.screenshot({ path: join(SHOTS, name), caret: "initial" });
+  const shot = async (name) => { await settled(mobile); await mobile.screenshot({ path: join(SHOTS, name), caret: "initial" }); };
   watch(mobile, "phone");
 
   await stage("phone: pair with a code on the pairing screen", async () => {
@@ -414,12 +546,17 @@ try {
     await mobile.waitForSelector(".page-body strong", { timeout: 15000 });
     await mobile.locator(".tabbar button").nth(2).click();
     await mobile.waitForSelector(".bot-pane .thread");
-    await mobile.locator(".bot-head [aria-label='Bot settings']").click();
+    await mobile.locator(".bot-head [aria-label='Agent settings']").click();
     await mobile.waitForSelector(".bot-settings #bot-memory");
     await shot("phone-bot-settings.png");
     await mobile.locator(".bot-settings-head button", { hasText: "Chat" }).click();
     await mobile.waitForSelector(".bot-pane .thread");
     await shot("phone-bot.png");
+  });
+  await stage("phone: an app fills the page", async () => {
+    await mobile.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Dashboards/Projects board/index.html")}`);
+    await mobile.frameLocator(".app-frame").locator(".card").first().waitFor({ timeout: 10000 });
+    await shot("phone-app.png");
   });
   await webkit.close();
 

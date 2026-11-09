@@ -19,29 +19,39 @@ export function mountTree(pane: HTMLElement): void {
     h("button", { class: "icon-btn", title: "Show sidebar (⌘\\)", "aria-label": "Show sidebar", onclick: () => toggleTreePane() }, icon("sidebarLeft", 18)),
     h("button", { class: "icon-btn", title: "Search (⌘K)", "aria-label": "Search", onclick: () => openPalette() }, icon("search", 18)),
     h("button", { class: "icon-btn", title: "Today", "aria-label": "Today", onclick: () => go({ view: "today" }) }, icon("today", 18)));
+  const demoPill = h("span", { class: "demo-pill hidden", title: "Demo mode: the agents are scripted" }, "Demo");
+  const themeBtn = h("button", { class: "icon-btn", "aria-label": "Theme", title: "Theme: system, day, night" });
+  const phoneTheme = h("button", { class: "icon-btn phone-only", "aria-label": "Theme", title: "Theme: system, day, night" });
   const top = h("div", { class: "tree-top" },
-    h("div", { class: "brand" }, h("span", { class: "brand-mark" }, icon("layers", 14)), h("span", { class: "brand-name" }, "Peers")),
-    h("button", { class: "icon-btn", title: "Hide sidebar (⌘\\)", "aria-label": "Hide sidebar", onclick: () => toggleTreePane() }, icon("sidebarLeft", 17)));
+    h("div", { class: "brand" }, h("span", { class: "brand-mark" }, icon("layers", 14)), h("span", { class: "brand-name" }, "Peers"), demoPill),
+    // On a phone the sidebar is the whole screen: its settings sit up here instead of at the foot.
+    h("button", { class: "icon-btn phone-only", title: "Settings", "aria-label": "Settings", onclick: () => { go({ view: "settings" }); store.set({ tab: "page" }); } }, icon("settings", 18)),
+    phoneTheme,
+    h("button", { class: "icon-btn desktop-only", title: "Hide sidebar (⌘\\)", "aria-label": "Hide sidebar", onclick: () => toggleTreePane() }, icon("sidebarLeft", 17)));
   const search = h("button", { class: "search-btn", onclick: () => openPalette() },
     icon("search", 15), h("span", null, "Search vault"), h("span", { class: "kbd" }, "⌘K"));
-  const themeBtn = h("button", { class: "icon-btn", "aria-label": "Theme", title: "Theme: system, day, night" });
   const foot = h("div", { class: "tree-foot" },
     h("button", { class: "icon-btn", title: "Settings", "aria-label": "Settings", onclick: () => go({ view: "settings" }) }, icon("settings", 17)),
     themeBtn);
-  themeBtn.addEventListener("click", () => {
+  const cycleTheme = (): void => {
     const order = ["system", "day", "night"] as const;
     const next = order[(order.indexOf(store.get().theme) + 1) % order.length]!;
     setTheme(next);
     toast(`Theme: ${next === "system" ? "match the system" : next}`);
-  });
+  };
+  themeBtn.addEventListener("click", cycleTheme);
+  phoneTheme.addEventListener("click", cycleTheme);
   pane.append(rail, top, search, scroll, foot);
 
   const render = (): void => {
     const s = store.get();
-    replace(themeBtn, icon(s.theme === "night" ? "moon" : s.theme === "day" ? "sun" : "contrast", 17));
+    const themeIcon = s.theme === "night" ? "moon" : s.theme === "day" ? "sun" : "contrast";
+    replace(themeBtn, icon(themeIcon, 17));
+    replace(phoneTheme, icon(themeIcon, 18));
+    demoPill.classList.toggle("hidden", !(s.demo && s.demoHidden));
     replace(scroll, renderTree());
   };
-  store.on(["tree", "bots", "expanded", "route", "changed", "theme", "today", "owners", "fronts"], render);
+  store.on(["tree", "bots", "expanded", "route", "changed", "theme", "today", "owners", "fronts", "apps", "demo", "demoHidden"], render);
   render();
 }
 
@@ -127,7 +137,7 @@ function node(n: TreeNode, current: string, depth: number): Node {
   const bot = botById(botId);
   if (n.type === "file") {
     const changed = s.changed.includes(n.path);
-    return h("button", {
+    const fileRow = h("button", {
       class: ["tree-row", current === n.path && "selected"],
       dataset: { path: n.path },
       title: n.path,
@@ -136,12 +146,13 @@ function node(n: TreeNode, current: string, depth: number): Node {
     },
       h("span", { class: "twisty" }),
       // A page with its own agent shows the agent.
-      bot ? avatar(bot, 18) : h("span", { class: "file-icon" }, icon(n.kind === "pdf" ? "pdf" : n.kind === "image" || n.kind === "svg" ? "image" : "file", 15)),
+      bot ? avatar(bot, 18) : h("span", { class: "file-icon" }, icon(n.kind === "pdf" ? "pdf" : n.kind === "image" || n.kind === "svg" ? "image" : n.kind === "app" ? "app" : "file", 15)),
       // A page agent is shown by its name ("Personal website"), not its file name.
-      h("span", { class: "label", title: n.path }, bot ? bot.name : n.name.replace(/\.(md|markdown|org)$/i, "")),
+      h("span", { class: "label", title: n.path }, bot ? bot.name : n.name.replace(/\.(md|markdown|org|html?)$/i, "")),
       isReadonly(n.path) ? h("span", { class: "tree-tag", title: "Generated: edit the source note" }, icon("lock", 11)) : null,
       bot ? statusDot(bot) : null,
       changed ? h("span", { class: "dot changed", title: "Changed since you last looked" }) : null);
+    return h("div", { class: "tree-item" }, fileRow, moreButton(n, (at) => fileMenu(n, botId, at)));
   }
   const open = !!s.expanded[n.path];
   const row = h("button", {
@@ -159,12 +170,27 @@ function node(n: TreeNode, current: string, depth: number): Node {
     oncontextmenu: (e: MouseEvent) => { e.preventDefault(); folderMenu(n, botId, { x: e.clientX, y: e.clientY }); },
   },
     h("span", { class: "twisty" }, icon(open ? "chevronDown" : "chevronRight", 12)),
-    bot ? avatar(bot, 18) : h("span", { class: "file-icon" }, icon("folder", 15)),
+    bot ? avatar(bot, 18) : h("span", { class: "file-icon" }, icon(s.apps.includes(n.path) ? "app" : "folder", 15)),
     h("span", { class: "label" }, n.name),
+    bot && s.apps.includes(n.path) ? h("span", { class: "tree-tag", title: "An app: opening the folder opens it" }, icon("app", 11)) : null,
     isReadonly(n.path) ? h("span", { class: "tree-tag", title: "Generated: edit the source note" }, icon("lock", 11)) : null,
     statusDot(bot));
   attachLongPress(row, (pt) => folderMenu(n, botId, pt));
-  return h("div", null, row, open ? h("div", { class: "tree-children" }, (n.children ?? []).map((c) => node(c, current, depth + 1))) : null);
+  return h("div", null, h("div", { class: "tree-item" }, row, moreButton(n, (at) => folderMenu(n, botId, at))),
+    open ? h("div", { class: "tree-children" }, (n.children ?? []).map((c) => node(c, current, depth + 1))) : null);
+}
+
+/** The row's menu, also on hover: right-click and long press are easy to miss. */
+function moreButton(n: TreeNode, open: (at: { x: number; y: number }) => void): HTMLElement {
+  const btn = h("button", {
+    class: "row-more", title: "More", "aria-label": `More for ${n.name}`,
+    onclick: (e: MouseEvent) => {
+      e.stopPropagation();
+      const r = btn.getBoundingClientRect();
+      open({ x: r.right - 190, y: r.bottom + 4 });
+    },
+  }, icon("more", 15));
+  return btn;
 }
 
 function attachLongPress(el: HTMLElement, fn: (pt: { x: number; y: number }) => void): void {

@@ -10,7 +10,7 @@
   --active: rgba(14, 124, 123, 0.10);
   --text: #1F2328;
   --text-2: #3D4248;
-  --muted: #6B6F76;
+  --muted: #666A71;
   --faint: #9A9EA5;
   --line: #E4E1DA;
   --line-strong: #D5D1C8;
@@ -18,7 +18,7 @@
   --accent-text: #0B6766;
   --accent-soft: rgba(14, 124, 123, 0.12);
   --accent-contrast: #FFFFFF;
-  --attention: #B7791F;
+  --attention: #93601A;
   --attention-soft: rgba(232, 163, 61, 0.18);
   --danger: #C2412D;
   --danger-soft: rgba(194, 65, 45, 0.10);
@@ -29,7 +29,10 @@
   --code-bg: #F1EEE7;
   --shadow-float: 0 8px 24px rgba(20, 22, 26, 0.08), 0 1px 2px rgba(20, 22, 26, 0.06);
   --shadow-pop: 0 16px 40px rgba(20, 22, 26, 0.14), 0 2px 6px rgba(20, 22, 26, 0.08);
-  --scrim: rgba(20, 22, 26, 0.28);
+  --scrim: rgba(20, 22, 26, 0.16);
+  --toast-bg: #1F2328;
+  --toast-fg: #FAF9F6;
+  --head-h: 56px;
 
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
   --font-read: "New York", "Iowan Old Style", ui-serif, "Charter", Georgia, serif;
@@ -85,6 +88,9 @@
   --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
   --scrim: rgba(0, 0, 0, 0.5);
+  /* A raised surface, not the brightest thing on a dark screen. */
+  --toast-bg: #2A323C;
+  --toast-fg: #E6E8EB;
 
   --hue-teal: #3FB8B4;
   --hue-indigo: #8B94F0;

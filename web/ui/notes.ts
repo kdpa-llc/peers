@@ -502,7 +502,7 @@ function openPopover(args: { key: string; region: Rect; label: string; binary: b
   closeBubble();
   const bot = botById(ctx.page.owner);
   const area = h("textarea", {
-    rows: 2, placeholder: `Tell ${bot?.name ?? "the bot"} what to change…`, "aria-label": "Instruction",
+    rows: 2, placeholder: `Tell ${bot?.name ?? "the agent"} what to change…`, "aria-label": "Instruction",
   }) as HTMLTextAreaElement;
   area.value = args.text ?? "";
   let saveTimer: number | undefined;
@@ -608,7 +608,7 @@ function onSelection(): void {
   const region: Rect = { x: rect.left - f.left, y: rect.top - f.top, w: rect.width, h: rect.height };
   closeBubble();
   const bot = botById(ctx.page.owner);
-  const input = h("textarea", { rows: 1, placeholder: `Ask ${bot?.name ?? "the bot"} to…`, "aria-label": "Ask about the selection" }) as HTMLTextAreaElement;
+  const input = h("textarea", { rows: 1, placeholder: `Ask ${bot?.name ?? "the agent"} to…`, "aria-label": "Ask about the selection" }) as HTMLTextAreaElement;
   const key = newKey("note");
   const target = { quote, lines };
   const go = async (queueOnly: boolean): Promise<void> => {
@@ -656,7 +656,7 @@ export async function sendDrafts(): Promise<void> {
     });
     const bot = botById(r.recipient);
     if (r.sent.length) {
-      toast(`Sent ${r.sent.length} note${r.sent.length === 1 ? "" : "s"} to ${bot?.name ?? "the bot"}`);
+      toast(`Sent ${r.sent.length} note${r.sent.length === 1 ? "" : "s"} to ${bot?.name ?? "the agent"}`);
       // The notes start a conversation of their own: show it.
       if (!store.get().pinned && r.thread_id) openThread(r.recipient, r.thread_id);
     }
@@ -733,7 +733,7 @@ function renderMarks(): void {
 
 function statusWord(n: Note): string {
   return ({
-    draft: "Draft, not sent", sent: "Sent", working: "Bot is working on it", applied: "Applied",
+    draft: "Draft, not sent", sent: "Sent", working: "The agent is working on it", applied: "Applied",
     answered: "Answered in chat", declined: "Declined", done: "Done, no changes", unresolved: "Page changed, redraw this mark",
     failed: "Failed",
   } as Record<string, string>)[n.status] ?? n.status;
@@ -760,7 +760,8 @@ const TOOLS: { tool: Tool; icon: string; label: string; key: string }[] = [
 function renderPill(): void {
   if (!pillEl) return;
   const s = store.get();
-  const show = s.route.view === "page" && !!s.page;
+  // Apps are not marked up: the pen and the arrow are for pages.
+  const show = s.route.view === "page" && !!s.page && s.page.kind !== "app";
   pillEl.classList.toggle("hidden", !show);
   if (!show) return;
   const drafts = s.notes.filter((n) => n.status === "draft" || n.status === "unresolved").length;
@@ -774,7 +775,7 @@ function renderPill(): void {
     drafts ? [
       h("span", { class: "divider" }),
       h("button", { class: "send", onclick: () => void sendDrafts(), title: "Send (⌘Enter)" }, icon("send", 15),
-        h("span", null, `Send ${drafts}`, h("span", { class: "send-label-long" }, ` note${drafts === 1 ? "" : "s"} to ${bot?.name ?? "bot"}`))),
+        h("span", null, `Send ${drafts}`, h("span", { class: "send-label-long" }, ` note${drafts === 1 ? "" : "s"} to ${bot?.name ?? "the agent"}`))),
       h("button", { class: "discard", title: "Discard drafts", "aria-label": "Discard drafts", onclick: () => void discardDrafts() }, icon("x", 14)),
     ] : null);
 }
@@ -798,11 +799,13 @@ export function mountPeek(): HTMLElement {
       void sendMessage(bot.id, body, { path: s.page!.path }).catch(fail);
       toast(`Sent to ${bot.name}`);
     };
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); send(); } });
+    const sendBtn = h("button", { class: "send-btn", "aria-label": "Send", disabled: true, onclick: send }, icon("send", 15)) as HTMLButtonElement;
+    input.addEventListener("input", () => { sendBtn.disabled = !input.value.trim(); });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); send(); sendBtn.disabled = true; } });
     replace(el,
       h("button", { "aria-label": `Open ${bot.name}`, onclick: () => store.set({ tab: "bot" }) }, avatar(bot, 28)),
       input,
-      h("button", { class: "send-btn", "aria-label": "Send", onclick: send }, icon("send", 16)));
+      sendBtn);
   };
   store.on(["route", "page", "botId", "bots", "marking", "tool", "notes"], render);
   addEventListener("resize", render);

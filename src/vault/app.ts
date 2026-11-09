@@ -12,6 +12,8 @@ import { BotRegistry, type Bot, type BotDef } from "./bots.ts";
 import { Conversations, type ThreadView } from "./conversations.ts";
 import { DemoEngine, T3Engine, type BotEngine, type EngineThread } from "./engine.ts";
 import { FileTracker, type Attribution, type FileChange } from "./files.ts";
+import { AppError, appEntry, AppGrants, AppSessions, effectiveGrant, findApp, MANIFEST, type AppInfo } from "./apps.ts";
+import { AppServers, type SandboxMode } from "./appserver.ts";
 import { frontPage, layoutFile, PAGE_EXT, PARA_FOLDERS, paraLayout, readLayout, suggestLayout, validateLayout, within, type Layout } from "./layout.ts";
 import { checkRead, PolicyError } from "./paths.ts";
 import { ensureVaultId, loadSettings, openDb, saveSettings, stateDirFor, writeJsonAtomic, type VaultSettings } from "./state.ts";
@@ -34,6 +36,8 @@ export type OpenVaultOptions = {
   t3Bin?: string;
   watcher?: Watcher | false;
   log?: (line: string) => void;
+  /** How app servers are sandboxed (ADR 0007); detected when absent. "off" is for tests and development. */
+  appSandbox?: SandboxMode;
 };
 
 export type BusEvent = { seq: number; type: string; data: Record<string, unknown> };
@@ -88,6 +92,11 @@ export class VaultApp {
   readonly triggers: Triggers;
   readonly signins: SignIns;
   readonly bus = new Bus();
+  /** Capability tokens for app frames, and what the owner allowed each app (ADR 0006). */
+  readonly appSessions = new AppSessions();
+  readonly appGrants: AppGrants;
+  /** App servers, run on demand in a sandbox (ADR 0007). */
+  readonly appServers: AppServers;
   private settingsValue: VaultSettings;
   private layoutValue: Layout;
   /** Why `.peers/layout.json` was not used, when it could not be read. */
@@ -115,6 +124,7 @@ export class VaultApp {
       default_model: { provider: "claude", model: "claude-sonnet-5-5", thinking: "medium" },
     });
     this.db = openDb(join(this.stateDir, "vault.db"));
+    this.appGrants = new AppGrants(this.db);
     this.vault = new Vault(this.root);
     this.layoutValue = this.loadLayout();
     const now = (): Date => this.clock.now();
@@ -142,6 +152,14 @@ export class VaultApp {
     this.triggers = new Triggers({ db: this.db, registry: this.registry, conversations: this.conversations, now });
     this.signins = new SignIns(opts.homes ?? defaultAgentHomes(), () => this.bus.publish("agents.changed"));
     this.watcher = opts.watcher === false ? undefined : opts.watcher ?? new FsWatcher(this.root);
+    this.appServers = new AppServers({
+      vaultRoot: this.root, logDir: join(this.stateDir, "apps"), now,
+      ...(opts.appSandbox ? { sandbox: opts.appSandbox } : {}),
+      // The server reads the vault through the data API with a token of its own, which lives
+      // as long as the process.
+      token: (app) => this.appSessions.open(app, `server:${app.root}`, { network: [], server: true }, this.clock.now(), 24 * 365).token,
+      revoke: (token) => this.appSessions.revoke(token),
+    });
   }
 
   static async open(opts: OpenVaultOptions): Promise<VaultApp> {
@@ -272,6 +290,13 @@ export class VaultApp {
   /** Who most likely made a change: a bot that is working or just was, else someone outside. */
   private attribute(rel: string): Attribution {
     if (this.actingOwner) return { author: "human", outsideScope: false };
+    // An app server writes only in its app's data/ folder (ADR 0007).
+    for (let i = rel.indexOf("/data/"); i > 0; i = rel.indexOf("/data/", i + 1)) {
+      const folder = rel.slice(0, i);
+      if (existsSync(join(this.root, folder, MANIFEST)) && this.appServers.status(folder).state === "running") {
+        return { author: `app:${folder}`, outsideScope: false };
+      }
+    }
     const now = this.clock.now().getTime();
     const candidates = [...this.lastActive.entries()]
       .filter(([, a]) => a.at === Number.POSITIVE_INFINITY || now - a.at < ATTRIBUTION_MS)
@@ -286,6 +311,7 @@ export class VaultApp {
 
   private onFileChange(c: FileChange): void {
     this.triggers.onChange(c);
+    this.appServers.fileChanged(c.path);
     this.bus.publish("file.changed", { paths: [c.path], author: c.author, op: c.op });
     if (c.op === "delete" || c.created) this.bus.publish("tree.changed");
     this.bus.publish("today.changed");
@@ -354,6 +380,7 @@ export class VaultApp {
     this.watcher?.stop();
     this.unsubscribeEngine?.();
     this.signins.stop();
+    await this.appServers.stopAll();
     await this.engine.stop();
     this.db.close();
   }
@@ -390,7 +417,7 @@ export class VaultApp {
 
   requireBot(id: string): Bot {
     const bot = this.registry.get(id);
-    if (!bot) throw new NotFound(`no bot ${id}`);
+    if (!bot) throw new NotFound(`no agent ${id}`);
     return bot;
   }
 
@@ -427,7 +454,7 @@ export class VaultApp {
     if (text.length > 20000) throw new HttpError(413, "message is too long");
     if (args.threadId) {
       const t = this.requireThread(args.threadId);
-      if (t.bot_id !== bot.def.id) throw new BadRequest("that conversation belongs to another bot");
+      if (t.bot_id !== bot.def.id) throw new BadRequest("that conversation belongs to another agent");
     }
     const context = args.context ? {
       ...(args.context.path ? { path: checkRead(this.root, args.context.path) } : {}),
@@ -468,11 +495,15 @@ export class VaultApp {
     const owners: Record<string, string> = {};
     for (const b of this.registry.list()) if (b.path) owners[b.path] = b.def.id;
     const fronts: Record<string, string> = {};
+    const apps: string[] = [];
     const readonly: string[] = [];
     const walk = (n: TreeNode): void => {
       for (const c of n.children ?? []) {
         if (c.type === "dir") {
-          const fp = frontPage(this.root, c.path);
+          // An app folder opens its app (ADR 0006); any other folder its front page.
+          const app = appEntry(this.root, c.path);
+          if (app) apps.push(c.path);
+          const fp = app ?? frontPage(this.root, c.path);
           if (fp) fronts[c.path] = fp;
           walk(c);
         }
@@ -481,7 +512,7 @@ export class VaultApp {
     };
     walk(tree);
     const rootFront = frontPage(this.root, "");
-    return { tree, owners, fronts, readonly, ...(rootFront ? { root_front: rootFront } : {}), inbox: layout.inbox ?? null, archive: layout.archive ?? null };
+    return { tree, owners, fronts, apps, readonly, ...(rootFront ? { root_front: rootFront } : {}), inbox: layout.inbox ?? null, archive: layout.archive ?? null };
   }
 
   readFile(rel: string): Record<string, unknown> {
@@ -513,6 +544,90 @@ export class VaultApp {
     return out;
   }
 
+  // ------------------------------------------------------------------ apps (ADR 0006)
+
+  /** Open an app for a device: a capability path for its frame, and what it asks for beyond its grant. */
+  openApp(path: string, device: string): Record<string, unknown> {
+    const app = this.resolveApp(path);
+    const g = effectiveGrant(app, this.appGrants.get(app.root));
+    const session = this.appSessions.open(app, device, { network: g.allowed, server: g.server }, this.clock.now());
+    // Start an allowed server now, so its first request does not wait for it.
+    if (g.server) void this.appServers.ensure(app).catch(() => {});
+    return {
+      url: `/apps/${session.token}/${app.entry.split("/").map(encodeURIComponent).join("/")}`,
+      app: {
+        name: app.name, root: app.root, entry: app.entry, manifest: app.manifest, reads: app.reads, network: g.allowed, asks: g.asks,
+        ...(app.description ? { description: app.description } : {}),
+        ...(app.server ? { server: { file: app.server, allowed: g.server, asks: g.asksServer, ...this.appServers.status(app.root), log: undefined } } : {}),
+      },
+      owner: this.registry.ownerOf(app.root || checkRead(this.root, path)).def.id,
+    };
+  }
+
+  private resolveApp(path: string): AppInfo {
+    let app;
+    try {
+      app = findApp(this.root, path);
+    } catch (err) {
+      if (err instanceof AppError) throw new BadRequest(err.message);
+      throw err;
+    }
+    if (!app) throw new NotFound(`${path} is not an app`);
+    return app;
+  }
+
+  /** Whether the owner allows this app's server now (checked on every request it gets). */
+  appServerAllowed(app: AppInfo): boolean {
+    return effectiveGrant(app, this.appGrants.get(app.root)).server;
+  }
+
+  /** An app folder's server: its state and recent output. */
+  appServer(root: string): Record<string, unknown> {
+    const app = this.resolveApp(root);
+    return { ...this.appServers.status(app.root), file: app.server ?? null, log_file: this.appServers.logFile(app.root) };
+  }
+
+  async restartAppServer(root: string): Promise<Record<string, unknown>> {
+    const app = this.resolveApp(root);
+    if (!app.server) throw new BadRequest(`${app.root} has no server`);
+    if (!effectiveGrant(app, this.appGrants.get(app.root)).server) throw new HttpError(403, "allow this app's server first");
+    try {
+      await this.appServers.restart(app);
+    } catch (err) {
+      throw new HttpError(503, (err as Error).message);
+    }
+    return this.appServer(root);
+  }
+
+  async stopAppServer(root: string): Promise<Record<string, unknown>> {
+    const app = this.resolveApp(root);
+    await this.appServers.stop(app.root);
+    return this.appServer(root);
+  }
+
+  /** The owner allows an app the origins, and the server, it asks for (only those). */
+  grantApp(root: string, network: string[], server = false): Record<string, unknown> {
+    const app = this.resolveApp(root);
+    if (!app.manifest || app.root !== checkRead(this.root, root)) throw new BadRequest(`${root} is not an app folder`);
+    const extra = network.filter((o) => !app.network.includes(o));
+    if (extra.length) throw new BadRequest(`the app does not ask for ${extra.join(", ")}`);
+    if (server && !app.server) throw new BadRequest("the app has no server");
+    this.appGrants.set(app.root, { network: [...new Set(network)], ...(server ? { server: true } : {}) }, this.clock.now());
+    this.bus.publish("apps.changed", { root: app.root });
+    return { ok: true, network, server };
+  }
+
+  /** Take back what an app was allowed, and stop its server. */
+  async revokeApp(root: string): Promise<Record<string, unknown>> {
+    const rel = checkRead(this.root, root);
+    const removed = this.appGrants.remove(rel);
+    // Open frames lose their tokens too: they reopen with what is left.
+    this.appSessions.revokeApp(rel);
+    await this.appServers.stop(rel);
+    this.bus.publish("apps.changed", { root: rel });
+    return { ok: removed };
+  }
+
   /** The owner has seen this file as it is (when `hash` still matches). */
   markSeen(rel: string, hash?: string): boolean {
     const path = checkRead(this.root, rel);
@@ -533,6 +648,7 @@ export class VaultApp {
 
   authorName(author: string): string {
     if (author === "external") return "outside Peers";
+    if (author.startsWith("app:")) return `the ${author.slice(4).split("/").pop()} app`;
     if (author === "human") return "you";
     return this.registry.get(author)?.def.name ?? author;
   }

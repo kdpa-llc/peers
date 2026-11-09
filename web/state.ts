@@ -21,8 +21,10 @@ export type State = {
   tree: TreeNode | null;
   /** Folder or page path → the agent that looks after it. */
   owners: Record<string, string>;
-  /** Folder path → its front page. */
+  /** Folder path → its front page (an app folder's: the page its app opens). */
   fronts: Record<string, string>;
+  /** App folders (ADR 0006). */
+  apps: string[];
   /** Generated content, edited only through its source. */
   readonly: string[];
   inbox: string | null;
@@ -55,6 +57,8 @@ export type State = {
   marking: boolean;
   /** Bumped when the page must re-render even if its data did not change (resize, theme). */
   layoutTick: number;
+  /** The owner closed the demo-mode notice (a "Demo" pill by the brand stays). */
+  demoHidden: boolean;
 };
 
 const saved = (key: string, fallback: string): string => {
@@ -76,6 +80,7 @@ export const store = new Store<State>({
   tree: null,
   owners: {},
   fronts: {},
+  apps: [],
   readonly: [],
   inbox: null,
   archive: null,
@@ -104,6 +109,7 @@ export const store = new Store<State>({
   selection: null,
   marking: false,
   layoutTick: 0,
+  demoHidden: saved("demoHidden", "0") === "1",
 });
 
 // ------------------------------------------------------------------ toasts
@@ -184,7 +190,7 @@ export function loadBotsSoon(): void {
 export async function loadTree(): Promise<void> {
   const t = await api.get("/api/tree");
   store.set({
-    tree: t.tree, owners: t.owners, fronts: t.fronts ?? {}, readonly: t.readonly ?? [],
+    tree: t.tree, owners: t.owners, fronts: t.fronts ?? {}, apps: t.apps ?? [], readonly: t.readonly ?? [],
     inbox: t.inbox ?? null, archive: t.archive ?? null, changed: t.changed,
   });
 }

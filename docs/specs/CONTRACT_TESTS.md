@@ -20,3 +20,21 @@ Rules that JSON Schema cannot express. Each has a number; the tests that enforce
    (`.peers/agents/<id>.json`) with an unseen id that carries enabled triggers or a wide write
    scope, or a known one changed on disk to add them, is marked `needs_review`, and its
    triggers do not fire until the owner confirms it. (`tests/schedules.test.ts`)
+6. **An app runs in an opaque origin that cannot act as the owner** (ADR 0006). App files are
+   served only under `/apps/<token>/`, never from a session; every response there carries a
+   CSP with `sandbox` and without `allow-same-origin`, `frame-ancestors` limited to Peers' own
+   origins, and sources limited to that token's path plus granted origins. The API refuses
+   requests with `Origin: null` or cross-site fetch metadata. (`tests/apps.test.ts`)
+7. **An app reads only its own folder and the paths its manifest lists,** each through the
+   path policy (#1). A token is bound to one app and one device and stops working when the
+   device is revoked or after twelve hours. (`tests/apps.test.ts`)
+8. **Internet access waits for the owner and is limited to what the owner allowed.** The grant
+   lives in Peers' state, not the vault; origins a manifest adds later stay blocked until the
+   owner allows them too. (`tests/apps.test.ts`)
+9. **An app's server runs only with the owner's grant, and only in a sandbox that hides Peers'
+   state** (ADR 0007). Under bubblewrap it gets new namespaces, `/usr` and `/etc` read-only, its
+   app folder read-only, its `data/` folder as the only writable vault path, a private `/tmp`,
+   no `/proc`, no vault or state mount, and a clean environment; it reads the vault only through
+   the data API with the app's scope (#7). Every proxied request checks the current grant, and
+   taking the grant back stops the server and the app's tokens. Without a working sandbox it
+   does not start unless the operator turns the sandbox off. (`tests/appserver.test.ts`)
