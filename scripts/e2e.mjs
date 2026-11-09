@@ -123,6 +123,18 @@ async function drawEllipse(page, r) {
   await page.mouse.up();
 }
 
+/** Wait (up to 3 s) until running, finite animations have finished: screenshots show settled frames. */
+async function settled(p) {
+  const stuck = await p.evaluate(async () => {
+    const running = () => document.getAnimations().filter((a) => a.playState === "running" && a.effect?.getComputedTiming().iterations !== Infinity);
+    const all = running();
+    const timeout = new Promise((done) => setTimeout(() => done(false), 3000));
+    const ok = await Promise.race([Promise.all(all.map((a) => a.finished.catch(() => {}))).then(() => true), timeout]);
+    return ok ? null : running().map((a) => `${a.animationName || a.transitionProperty} on .${String(a.effect?.target?.className ?? "?").split(" ").join(".")}`);
+  });
+  if (stuck?.length) console.log(`    (still animating after 3 s: ${stuck.join("; ")})`);
+}
+
 const errors = [];
 let probing = false;
 function watch(page, label) {
@@ -155,6 +167,8 @@ try {
     await page.waitForSelector(".today h1");
     ok((await page.locator(".bot-tile").count()) >= 8, "expected a tile per bot");
     ok(!(await page.url()).includes("pair="), "pairing token stays out of the URL");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-today-day.png") });
   });
 
@@ -164,6 +178,8 @@ try {
     await page.waitForFunction(() => document.querySelector(".page-title")?.textContent === "Launch plan");
     await page.waitForSelector(".page-body .md-block");
     await page.waitForFunction(() => document.querySelector(".bot-id .name")?.textContent?.includes("Website Relaunch"));
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-page-day.png") });
   });
 
@@ -185,6 +201,8 @@ try {
     const chip = await page.locator(".change-chip").textContent();
     ok(/since you last looked · by Website Relaunch/.test(chip), `the chip says who changed it (${chip})`);
     ok(!(await page.locator(".change-chip button", { hasText: "Undo" }).count()), "no Undo");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-changed-day.png") });
   });
 
@@ -207,6 +225,8 @@ try {
     await page.waitForSelector(".popover textarea", { timeout: 5000 });
     const target = await page.locator(".popover .target").textContent();
     ok(/Line/.test(target), `popover shows the resolved target (${target})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-marking-day.png") });
     await page.fill(".popover textarea", "turn into a table with owners");
     await page.keyboard.press("Enter");
@@ -230,6 +250,8 @@ try {
     await page.locator(".popover button", { hasText: "Add to batch" }).click();
     const label = await page.locator(".tool-pill .send").textContent();
     ok(/Send 2/.test(label), `pill shows two queued notes (${label})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-batch-day.png") });
     await page.locator(".tool-pill .send").click();
     await page.waitForFunction(() => !document.body.innerText.includes("Redirect old blog URLs"), null, { timeout: 15000 });
@@ -241,6 +263,8 @@ try {
     await page.waitForSelector(".conv-list .conv-open");
     const n = await page.locator(".conv-list .conv-open").count();
     ok(n >= 3, `each notes send is its own conversation (${n})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-conversations-day.png") });
     await page.locator(".conv-row.new").click();
     await page.waitForSelector(".composer textarea");
@@ -256,6 +280,8 @@ try {
     const ctx = await page.locator(".msg.mine .ctx").first().textContent();
     ok(/from Website Relaunch/.test(ctx), `the mention says where it came from (${ctx})`);
     await page.waitForSelector(".thread .card.peer >> text=Open that conversation");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-mention-day.png") });
   });
 
@@ -264,10 +290,12 @@ try {
     await page.keyboard.press("Enter");
     await page.waitForSelector(".msg .bot-text >> text=I will remember", { timeout: 15000 });
     ok(!(await page.locator(".bot-pane .tabs").count()), "the bot pane is chat only");
-    await page.locator(".bot-head [aria-label='Bot settings']").click();
+    await page.locator(".bot-head [aria-label='Agent settings']").click();
     await page.waitForSelector(".bot-settings #bot-memory >> text=summaries under five bullets");
     ok(await page.locator(".bot-settings #bot-triggers").count(), "triggers are on the settings page");
     ok(await page.locator(".bot-settings #bot-setup").count(), "instructions and model are on the settings page");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-bot-settings-day.png") });
   });
 
@@ -283,7 +311,9 @@ try {
     await page.waitForSelector(".page-body table >> text=Tomatoes, basil");
     await page.waitForFunction(() => document.querySelector(".bot-id .name")?.textContent?.includes("Garden beds"));
     const status = await page.locator(".bot-id .status").textContent();
-    ok(/Page agent/.test(status), `a single page can have its own agent (${status})`);
+    ok(/Garden beds\.org/.test(status), `a single page can have its own agent (${status})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-org-day.png") });
   });
 
@@ -309,12 +339,16 @@ try {
     ok(await page.evaluate(() => document.documentElement.dataset.theme === "night"), "night tokens applied");
     await page.goto(`http://127.0.0.1:${port}/#/p/${encodeURI("Projects/Website Relaunch/Launch plan.md")}`);
     await page.waitForSelector(".page-body .md-block");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-page-night.png") });
     await page.keyboard.press("p");
     const r = await blockRect(page, "Launch the new website");
     await drawEllipse(page, r);
     await page.waitForSelector(".popover textarea");
     await page.fill(".popover textarea", "shorten this");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-marking-night.png") });
     await page.keyboard.press("Escape");
   });
@@ -334,6 +368,8 @@ try {
     await page.fill(".popover textarea", "Extract to notes");
     await page.keyboard.press("Enter");
     await page.waitForSelector(".pin.answered, .pin.applied, .pin.done", { timeout: 15000 });
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-pdf-night.png") });
   });
 
@@ -354,7 +390,9 @@ try {
     await page.waitForSelector(".today h2 >> text=Changed since you looked");
     await page.waitForSelector(".row-card >> text=Birthdays", { timeout: 10000 });
     const by = await page.locator(".row-card", { hasText: "Birthdays" }).textContent();
-    ok(/by outside Peers/.test(by), `credited to outside Peers (${by})`);
+    ok(/outside Peers/.test(by), `credited to outside Peers (${by})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-today-night.png") });
   });
 
@@ -386,6 +424,8 @@ try {
     ok(probe.cookie === "blocked" && probe.storage === "blocked" && probe.parent === "blocked", `an opaque origin (${JSON.stringify(probe)})`);
     ok(probe.api === "blocked" && probe.internet === "blocked", `no API and no internet (${JSON.stringify(probe)})`);
     ok(probe.theme === "night", `the app follows Peers' theme (${probe.theme})`);
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-app-night.png") });
     // Asking the agent goes through you.
     await board.locator(".card .ask").first().click();
@@ -418,6 +458,8 @@ try {
     const csv = readFileSync(join(vault, "Areas/Finances/Expense log/data/expenses.csv"), "utf8");
     ok(/groceries/.test(csv) && /42\.50/.test(csv), `saved in the app's data folder (${csv.trim()})`);
     await page.waitForSelector(".app-chip.server.running");
+    await settled(page);
+
     await page.screenshot({ path: join(SHOTS, "desktop-app-server-night.png") });
     await page.locator(".app-chip.server").click();
     await page.waitForSelector(".modal .app-log >> text=expense log on port");
@@ -449,7 +491,7 @@ try {
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1",
   });
   const mobile = await phone.newPage();
-  const shot = (name) => mobile.screenshot({ path: join(SHOTS, name), caret: "initial" });
+  const shot = async (name) => { await settled(mobile); await mobile.screenshot({ path: join(SHOTS, name), caret: "initial" }); };
   watch(mobile, "phone");
 
   await stage("phone: pair with a code on the pairing screen", async () => {
@@ -484,7 +526,7 @@ try {
     await mobile.waitForSelector(".page-body strong", { timeout: 15000 });
     await mobile.locator(".tabbar button").nth(2).click();
     await mobile.waitForSelector(".bot-pane .thread");
-    await mobile.locator(".bot-head [aria-label='Bot settings']").click();
+    await mobile.locator(".bot-head [aria-label='Agent settings']").click();
     await mobile.waitForSelector(".bot-settings #bot-memory");
     await shot("phone-bot-settings.png");
     await mobile.locator(".bot-settings-head button", { hasText: "Chat" }).click();

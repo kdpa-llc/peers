@@ -20,6 +20,28 @@ All notable changes to this project are documented here. The format follows
   app bar shows its state and output. The demo vault has an expense log with a Python server.
 - `/api` refuses requests from opaque origins and other sites outright.
 
+### Changed
+
+- **A calmer, clearer interface.** Today opens with the date and a one-line summary, groups
+  what needs you and what changed into lists, shows "all clear" when there is nothing, and
+  lists agents by where they work, with a state only when something is happening. Archived
+  agents fold away.
+- The chat box is one field with @ and send inside it; an empty conversation offers a few
+  starting points that fill the box without sending.
+- The demo notice is one line, says it once, and can be closed (a small "Demo" pill stays).
+- The phone's third tab is "Chat" with the agent's avatar; the sidebar's controls move to its
+  top; rows are thumb-sized; agents list in one column.
+- Toasts rise in and sink out and stack at most three; pages show a placeholder while they
+  load and fade in once; tree rows have a "⋯" menu on hover; Settings is grouped into cards.
+- The interface says "agent" everywhere (it said "bot" in places). Muted and amber text now
+  meet 4.5:1 contrast. Motion is specified in docs/design/MOTION.md.
+
+### Fixed
+
+- A page's title no longer shows twice when the page starts with the same heading.
+- The chat box's hint no longer wraps and gets cut off.
+- The pairing screen fits narrow phones.
+
 ## [0.1.0] - 2026-11-07
 
 First version of Peers as a notes vault with agents, published to npm as `peers-vault`.

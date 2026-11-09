@@ -41,8 +41,8 @@ phone, and installs as a desktop app.
 | Agent home | A folder or a single page that has its own agent. The vault's layout says which (ADR 0005). |
 | Layout | `.peers/layout.json`: which folders and pages have agents, what is paused, generated or hidden. PARA is a preset. |
 | Front page | A folder's `index`, `README`, `main` or `Overview` page, or its folder note. Opening the folder shows it. |
-| Bot | The agent that owns a container. Shown with an avatar and the container's name. |
-| Vault bot | One extra bot that owns the vault root and `Inbox`. Your general assistant. |
+| Agent | What owns a folder or a page and talks with you. Shown with an avatar and its name. Code and older documents call it a bot. |
+| Vault agent | One extra agent that owns the vault root and `Inbox`. Your general assistant. |
 | Page | A file shown in the middle pane: markdown, image or PDF. |
 | Note | One mark on a page plus your instruction. Queued notes are sent in a batch. |
 | Conversation | One chat with a bot. A bot has as many as you like; notes and triggers start their own. |
@@ -380,14 +380,15 @@ Day, Night and System (default). Both themes use the same structure; only tokens
 | `--panel` (tree, bot) | `#F3F1EC` | `#151A20` |
 | `--surface` (cards, popovers) | `#FFFFFF` | `#1B2129` |
 | `--text` | `#1F2328` | `#E6E8EB` |
-| `--muted` | `#6B6F76` | `#9AA1AA` |
+| `--muted` | `#666A71` | `#9AA1AA` |
 | `--line` (hairlines) | `#E4E1DA` | `#262D36` |
 | `--accent` (teal) | `#0E7C7B` | `#3FB8B4` |
-| `--attention` (amber) | `#B7791F` | `#E8A33D` |
+| `--attention` (amber) | `#93601A` | `#E8A33D` |
 | `--danger` | `#C2412D` | `#F07A5F` |
 | `--ink` (default pen) | `#0E7C7B` | `#5ED1CC` |
 
-Contrast: body text on `--bg` is at least 12:1 in both themes; muted text at least 4.5:1.
+Contrast: body text on `--bg` is at least 12:1 in both themes; muted and amber text at least 4.5:1 on the
+background and the panels. `--faint` is for icons, separators and other marks that are not text.
 
 ### 10.2 Type
 System fonts only, so nothing downloads: `-apple-system, "SF Pro Text", system-ui` for UI;

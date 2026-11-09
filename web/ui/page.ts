@@ -19,6 +19,8 @@ import { renderApp } from "./apppage.ts";
 import { toggleTreePane } from "./tree.ts";
 
 let lastRendered = "";
+/** The route whose content has faded in, so live updates of it do not fade again. */
+let entered = "";
 /** The app page on screen, as path@hash. */
 let appShown = "";
 
@@ -52,12 +54,22 @@ export function mountPage(pane: HTMLElement): void {
     else if (s.route.view === "settings") replace(scroll, renderSettings());
     else if (s.route.view === "bot") replace(scroll, renderBotSettings(s.route.id));
     else if (s.pageError) replace(scroll, h("div", { class: "today" }, h("h1", null, "Can't open this page"), h("p", { class: "sub" }, s.pageError)));
-    else if (!s.page) replace(scroll, h("div", { class: "today" }, h("p", { class: "sub" }, "Loading…")));
+    // Until the page for this route arrives, a placeholder the size of a page (not the last one).
+    else if (!s.page || (s.route.view === "page" && s.page.path !== s.route.path)) replace(scroll, pageSkeleton());
     else if (s.page.kind === "app") {
       appShown = `${s.page.path}@${s.page.hash}`;
       replace(scroll, renderApp(s.page));
     } else replace(scroll, renderPage(s.page));
     scroll.classList.toggle("app-mode", s.route.view === "page" && s.page?.kind === "app");
+    // Content fades in once per route, when it is ready (MOTION.md: content); apps load in their frame.
+    const ready = s.route.view === "today" ? !!s.today
+      : s.route.view === "page" ? !!s.pageError || (!!s.page && s.page.path === s.route.path && s.page.kind !== "app")
+      : true;
+    if (ready && entered !== key) {
+      (scroll.firstElementChild as HTMLElement | null)?.classList.add("enter");
+      entered = key;
+    }
+    if (!ready && entered === key) entered = "";
     scroll.scrollTop = keepScroll;
   };
   store.on(["route", "page", "pageError", "layoutTick", "today", "bots"], (s, changed) => {
@@ -73,6 +85,12 @@ export function mountPage(pane: HTMLElement): void {
     render();
   });
   render();
+}
+
+function pageSkeleton(): Node {
+  return h("div", { class: "page-frame" }, h("div", { class: "skeleton", "aria-label": "Loading", role: "status" },
+    h("div", { class: "bar title" }), h("div", { class: "bar" }), h("div", { class: "bar" }), h("div", { class: "bar short" }),
+    h("div", { class: "bar" }), h("div", { class: "bar short" })));
 }
 
 function header(): Node {
@@ -92,7 +110,7 @@ function header(): Node {
     });
   } else {
     crumbs.append(h("span", { class: "current" }, s.route.view === "settings" ? "Settings"
-      : s.route.view === "bot" ? `${botById(s.route.id)?.name ?? "Bot"} · settings` : "Today"));
+      : s.route.view === "bot" ? `${botById(s.route.id)?.name ?? "Agent"} · settings` : "Today"));
   }
   const actions = h("div", { style: { display: "flex", gap: "4px" } });
   if (s.route.view === "page" && s.page) {
@@ -134,10 +152,10 @@ function renderPage(page: PageData): Node {
     let blocks = doc.blocks;
     const firstContent = blocks.findIndex((b) => b.t !== "frontmatter");
     const first = blocks[firstContent];
-    if (doc.title) {
-      title = doc.title;
-    } else if (first && first.t === "heading" && first.level === 1 && !first.todo) {
-      title = plainText(first.c);
+    // The page's own first heading becomes its title, shown once.
+    const firstH1 = first && first.t === "heading" && first.level === 1 && !first.todo ? plainText(first.c) : undefined;
+    title = doc.title ?? firstH1 ?? title;
+    if (firstH1 !== undefined && firstH1.trim().toLowerCase() === title.trim().toLowerCase()) {
       blocks = blocks.filter((_, i) => i !== firstContent);
     }
     body.append(renderBlocks(blocks, {
@@ -175,7 +193,7 @@ function renderPage(page: PageData): Node {
     const chip = h("div", { class: "change-chip", role: "status" },
       icon("sparkle", 14),
       h("span", null, `${c.created ? "New" : "Changed"} since you last looked · by ${by} · ${ago(c.at)}`),
-      c.outside_scope ? h("span", { class: "warn-tag", title: "Outside the folders this bot is asked to write in" }, "outside its folder") : null,
+      c.outside_scope ? h("span", { class: "warn-tag", title: "Outside the folders this agent is asked to write in" }, "outside its folder") : null,
       page.kind === "page" && c.hunks.length ? h("button", {
         onclick: () => {
           frame.querySelectorAll(".changed").forEach((el) => el.classList.remove("changed"));

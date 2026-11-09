@@ -417,7 +417,7 @@ export class VaultApp {
 
   requireBot(id: string): Bot {
     const bot = this.registry.get(id);
-    if (!bot) throw new NotFound(`no bot ${id}`);
+    if (!bot) throw new NotFound(`no agent ${id}`);
     return bot;
   }
 
@@ -454,7 +454,7 @@ export class VaultApp {
     if (text.length > 20000) throw new HttpError(413, "message is too long");
     if (args.threadId) {
       const t = this.requireThread(args.threadId);
-      if (t.bot_id !== bot.def.id) throw new BadRequest("that conversation belongs to another bot");
+      if (t.bot_id !== bot.def.id) throw new BadRequest("that conversation belongs to another agent");
     }
     const context = args.context ? {
       ...(args.context.path ? { path: checkRead(this.root, args.context.path) } : {}),

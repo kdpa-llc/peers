@@ -44,7 +44,7 @@ export function renderSettings(): Node {
   provider.addEventListener("change", () => { fill(); void saveModel(); });
   for (const el of [model, thinking]) el.addEventListener("change", () => void saveModel());
   const engineLine = s.engine?.kind === "demo"
-    ? h("p", { class: "muted" }, "Demo mode: bots are scripted and nothing leaves this computer. Start Peers without --scripted to run them on T3.")
+    ? h("p", { class: "muted" }, "Demo mode: agents are scripted and nothing leaves this computer. Start Peers without --scripted to run them on T3.")
     : signInView();
 
   const owner = h("input", { value: s.vault?.owner ?? "", "aria-label": "Your name" }) as HTMLInputElement;
@@ -73,9 +73,9 @@ export function renderSettings(): Node {
   return h("div", { class: "settings" },
     h("h1", null, "Settings"),
     h("section", null, h("h2", null, "Appearance"), theme),
-    h("section", null, h("h2", null, "You"), h("div", { class: "field" }, h("label", null, "Your name, as bots address you"), owner)),
-    h("section", null, h("h2", null, "Bots"),
-      h("p", { class: "muted" }, "Bots run on a T3 built into Peers, with their own Claude Code and Codex sign-ins, so their conversations stay out of your own apps."),
+    h("section", null, h("h2", null, "You"), h("div", { class: "field" }, h("label", null, "Your name, as agents address you"), owner)),
+    h("section", null, h("h2", null, "Agents"),
+      h("p", { class: "muted" }, "Agents run on a T3 built into Peers, with their own Claude Code and Codex sign-ins, so their conversations stay out of your own apps."),
       engineLine,
       h("div", { class: "field" }, h("label", null, "Default provider"), provider),
       h("div", { class: "field-row" }, h("div", { class: "field" }, h("label", null, "Model"), model), h("div", { class: "field" }, h("label", null, "Effort"), thinking))),
@@ -135,7 +135,7 @@ function signInView(): HTMLElement {
     const body: Node[] = [];
     if (waiting && l?.url) {
       body.push(h("p", null, "1. Open ", h("a", { href: l.url, target: "_blank", rel: "noopener noreferrer" }, a.provider === "claude" ? "the Claude sign-in page" : "the OpenAI device page"),
-        a.provider === "claude" ? " and sign in with the account the bots should use." : " and sign in."));
+        a.provider === "claude" ? " and sign in with the account the agents should use." : " and sign in."));
       if (a.provider === "codex" && l.code) {
         body.push(h("p", null, "2. Enter this code there:"), h("div", { class: "code-box" }, l.code),
           h("p", { class: "muted" }, "This page updates when the sign-in finishes."));

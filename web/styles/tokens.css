@@ -10,7 +10,7 @@
   --active: rgba(14, 124, 123, 0.10);
   --text: #1F2328;
   --text-2: #3D4248;
-  --muted: #6B6F76;
+  --muted: #666A71;
   --faint: #9A9EA5;
   --line: #E4E1DA;
   --line-strong: #D5D1C8;
@@ -18,7 +18,7 @@
   --accent-text: #0B6766;
   --accent-soft: rgba(14, 124, 123, 0.12);
   --accent-contrast: #FFFFFF;
-  --attention: #B7791F;
+  --attention: #93601A;
   --attention-soft: rgba(232, 163, 61, 0.18);
   --danger: #C2412D;
   --danger-soft: rgba(194, 65, 45, 0.10);

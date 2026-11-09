@@ -13,7 +13,7 @@ export function openPalette(initial = ""): void {
   if (open) return;
   open = true;
   const scrim = h("div", { class: "scrim" });
-  const input = h("input", { placeholder: "Search pages, bots and commands…", "aria-label": "Search", value: initial }) as HTMLInputElement;
+  const input = h("input", { placeholder: "Search pages, agents and commands…", "aria-label": "Search", value: initial }) as HTMLInputElement;
   const results = h("div", { class: "results", role: "listbox" });
   const box = h("div", { class: "palette", role: "dialog", "aria-label": "Search" }, input, results);
   let items: Item[] = [];

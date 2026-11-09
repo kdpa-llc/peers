@@ -57,6 +57,8 @@ export type State = {
   marking: boolean;
   /** Bumped when the page must re-render even if its data did not change (resize, theme). */
   layoutTick: number;
+  /** The owner closed the demo-mode notice (a "Demo" pill by the brand stays). */
+  demoHidden: boolean;
 };
 
 const saved = (key: string, fallback: string): string => {
@@ -107,6 +109,7 @@ export const store = new Store<State>({
   selection: null,
   marking: false,
   layoutTick: 0,
+  demoHidden: saved("demoHidden", "0") === "1",
 });
 
 // ------------------------------------------------------------------ toasts

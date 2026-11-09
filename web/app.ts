@@ -9,7 +9,7 @@ import {
 } from "./state.ts";
 import { appFilesChanged } from "./ui/apppage.ts";
 import { mountBot, toggleBotPane } from "./ui/bot.ts";
-import { showToast } from "./ui/common.ts";
+import { avatar, showToast } from "./ui/common.ts";
 import { handlePageKeys } from "./ui/notes.ts";
 import { mountPage } from "./ui/page.ts";
 import { showPairing } from "./ui/pair.ts";
@@ -27,7 +27,7 @@ function shell(): HTMLElement {
   const page = h("main", { class: "pane page-pane", "aria-label": "Page" });
   const bot = h("aside", { class: "pane bot-pane", "aria-label": "Bot" });
   const r1 = h("div", { class: "resizer", dataset: { for: "tree" }, role: "separator", "aria-label": "Resize sidebar" });
-  const r2 = h("div", { class: "resizer", dataset: { for: "bot" }, role: "separator", "aria-label": "Resize bot pane" });
+  const r2 = h("div", { class: "resizer", dataset: { for: "bot" }, role: "separator", "aria-label": "Resize chat pane" });
   const tabbar = h("nav", { class: "tabbar", "aria-label": "Sections" });
   root.append(banner, tree, r1, page, r2, bot, tabbar);
   mountTree(tree);
@@ -42,33 +42,58 @@ function shell(): HTMLElement {
     root.classList.toggle("bot-collapsed", s.botCollapsed);
     root.classList.toggle("tree-open", s.treeOpen);
     root.dataset.tab = s.tab;
-    replace(banner,
-      s.demo ? h("div", { class: "demo-banner" }, icon("sparkle", 14),
-        h("span", null, "Demo mode: bots are scripted. Start Peers without --scripted to run them on T3 with Claude or Codex."),
-        h("button", { onclick: () => go({ view: "settings" }) }, "Settings")) : null,
-      s.connection === "offline" ? h("div", { class: "conn-banner" }, "Offline. Reconnecting…") : null);
+    replace(banner, h("div", { class: "banner-inner" },
+      s.demo && !s.demoHidden ? h("div", { class: "demo-banner", role: "note" },
+        h("span", { class: "demo-pill" }, "Demo"),
+        h("span", { class: "demo-text" },
+          h("span", { class: "demo-long" }, "Agents are scripted, and nothing leaves this computer. Start Peers without --scripted to run them on Claude or Codex."),
+          h("span", { class: "demo-short" }, "Agents are scripted")),
+        h("button", { class: "link", onclick: () => go({ view: "settings" }) }, "Set up agents"),
+        h("button", { class: "icon-btn", title: "Hide this notice", "aria-label": "Hide the demo notice", onclick: () => closeDemoNotice(banner) }, icon("x", 13))) : null,
+      s.connection === "offline" ? h("div", { class: "conn-banner" }, "Offline. Reconnecting…") : null));
     const needs = s.bots.reduce((n, b) => n + b.unread, 0) + (s.today?.needs_you?.failures?.length ?? 0);
     const current = botById(s.botId);
     replace(tabbar,
-      tab("vault", "layers", "Vault", needs > 0),
-      tab("page", "file", s.route.view === "today" ? "Today" : "Page", false),
-      tab("bot", "bot", current?.name ?? "Bot", (current?.unread ?? 0) > 0));
+      tab("vault", icon("layers", 20), "Vault", needs > 0),
+      tab("page", icon(s.route.view === "today" ? "today" : "file", 20), s.route.view === "today" ? "Today" : "Page", false),
+      // The chat tab shows whose chat it is with the agent's avatar.
+      tab("bot", current ? tabAvatar(current) : icon("bot", 20), "Chat", (current?.unread ?? 0) > 0));
   };
-  const tab = (id: "vault" | "page" | "bot", ic: string, label: string, dot: boolean): HTMLElement =>
+  const tabAvatar = (bot: NonNullable<ReturnType<typeof botById>>): HTMLElement => {
+    const a = avatar(bot, 22);
+    a.classList.add("tab-avatar");
+    return a;
+  };
+  const tab = (id: "vault" | "page" | "bot", glyph: Node, label: string, dot: boolean): HTMLElement =>
     h("button", {
       class: store.get().tab === id ? "active" : undefined, "aria-current": store.get().tab === id ? "page" : undefined,
       onclick: () => {
         store.set({ tab: id });
         if (id === "bot" && store.get().botId) void loadThreads(store.get().botId!).catch(() => {});
       },
-    }, icon(ic, 20), h("span", null, label.length > 14 ? `${label.slice(0, 13)}…` : label), dot ? h("span", { class: "dot attention tab-dot" }) : null);
-  store.on(["treeCollapsed", "botCollapsed", "treeOpen", "tab", "demo", "connection", "bots", "botId", "today", "route"], renderLayout);
+    }, glyph, h("span", null, label), dot ? h("span", { class: "dot attention tab-dot" }) : null);
+  store.on(["treeCollapsed", "botCollapsed", "treeOpen", "tab", "demo", "demoHidden", "connection", "bots", "botId", "today", "route"], renderLayout);
   renderLayout();
   root.addEventListener("click", (e) => {
     // Tablet: tapping outside the tree overlay closes it.
     if (store.get().treeOpen && !(e.target as Element).closest(".tree-pane, .tree-toggle-inline")) store.set({ treeOpen: false });
   });
   return root;
+}
+
+/** The demo notice folds away, then stays hidden (MOTION.md: banner). */
+function closeDemoNotice(banner: HTMLElement): void {
+  if (banner.classList.contains("closing")) return;
+  banner.classList.add("closing");
+  // The fold's own end (or the fade's, under Reduce Motion), not a transition inside the notice.
+  const done = (e: TransitionEvent): void => {
+    if (e.target !== banner || (e.propertyName !== "grid-template-rows" && e.propertyName !== "opacity")) return;
+    banner.removeEventListener("transitionend", done);
+    persist("demoHidden", "1");
+    store.set({ demoHidden: true });
+    banner.classList.remove("closing");
+  };
+  banner.addEventListener("transitionend", done);
 }
 
 function resizable(handle: HTMLElement, cssVar: string, min: number, max: number, key: string, dir: 1 | -1): void {
