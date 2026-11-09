@@ -49,7 +49,12 @@ function applyProps(el: Element, props: Props | null | undefined): void {
 function append(parent: Node, child: Child): void {
   if (child === null || child === undefined || child === false) return;
   if (Array.isArray(child)) { for (const c of child) append(parent, c); return; }
-  parent.appendChild(child instanceof Node ? child : document.createTextNode(String(child)));
+  // Strings and numbers only ever become text nodes: nothing given here is parsed as markup.
+  if (typeof child === "string" || typeof child === "number") {
+    parent.appendChild(document.createTextNode(String(child)));
+    return;
+  }
+  parent.appendChild(child);
 }
 
 export function h<K extends keyof HTMLElementTagNameMap>(

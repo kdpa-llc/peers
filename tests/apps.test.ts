@@ -63,6 +63,8 @@ async function open(c: Ctx, path: string): Promise<{ url: string; app: Record<st
 }
 
 const csp = (r: Res): string => String(r.headers["content-security-policy"] ?? "");
+/** A string as a literal piece of a regular expression. */
+const literal = (s: string): string => s.replace(/[\\^$.*+?()[\]{}|/-]/g, "\\$&");
 
 test("#6 an app frame is sandboxed without same-origin, needs no session, and is framed only by Peers", async () => {
   await withApps(async (c) => {
@@ -79,8 +81,8 @@ test("#6 an app frame is sandboxed without same-origin, needs no session, and is
     assert.match(policy, /^sandbox allow-scripts allow-forms allow-modals allow-downloads;/);
     assert.doesNotMatch(policy, /allow-same-origin|allow-top-navigation|allow-popups/);
     const self = `http://127.0.0.1:${c.port}/apps/${o.token}/`;
-    assert.match(policy, new RegExp(`default-src ${self.replace(/[/.]/g, "\\$&")};`));
-    assert.match(policy, new RegExp(`connect-src ${self.replace(/[/.]/g, "\\$&")};`), "connect only within its own token path");
+    assert.match(policy, new RegExp(`default-src ${literal(self)};`));
+    assert.match(policy, new RegExp(`connect-src ${literal(self)};`), "connect only within its own token path");
     assert.match(policy, new RegExp(`frame-ancestors http://127\\.0\\.0\\.1:${c.port}$`));
     assert.doesNotMatch(policy, /'self'/, "WebKit does not match 'self' in a sandboxed document");
     assert.equal(page.headers["x-frame-options"], undefined);

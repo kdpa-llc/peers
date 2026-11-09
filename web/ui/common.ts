@@ -107,7 +107,7 @@ export function openModal(build: (close: () => void) => Child, opts: { label: st
   return close;
 }
 
-export function confirmDialog(title: string, text: string, confirm: string, danger = false): Promise<boolean> {
+export function confirmDialog(title: string, text: string | Node, confirm: string, danger = false): Promise<boolean> {
   return new Promise((resolve) => {
     openModal((close) => h("div", null,
       h("h3", null, title),

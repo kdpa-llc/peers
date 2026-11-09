@@ -203,7 +203,10 @@ async function onMessage(e: MessageEvent): Promise<void> {
     const text = d.text.trim().slice(0, 2000);
     const bot = botById(ctx.owner);
     try {
-      const yes = await confirmDialog(`Send this to ${bot?.name ?? "its agent"}?`, `${ctx.name} asks to send: “${text}”`, "Send");
+      // The app's words go in as text content, never as markup (CONTRACT_TESTS #3).
+      const body = document.createElement("span");
+      body.textContent = `${ctx.name} asks to send: “${text}”`;
+      const yes = await confirmDialog(`Send this to ${bot?.name ?? "its agent"}?`, body, "Send");
       if (!yes) return;
       await sendMessage(ctx.owner, text, { path: ctx.path });
       selectBot(ctx.owner);
